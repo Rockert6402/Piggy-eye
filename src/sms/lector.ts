@@ -120,7 +120,15 @@ export async function leerSMSBancarios(diasAtras = 30): Promise<number> {
     if (!esTransaccional(sms.body ?? '')) continue;
 
     const texto = (sms.body ?? '').trim();
-    const fecha = Number(sms.date) || Date.now();
+    // sms.date puede ser ms como string ("1718000000000") o una fecha formateada.
+    // Intentamos parseo numérico directo; si falla o es una fecha ISO la convertimos.
+    const fechaRaw = Number(sms.date);
+    const fecha =
+      Number.isFinite(fechaRaw) && fechaRaw > 1_000_000_000_000
+        ? fechaRaw
+        : sms.date
+        ? new Date(sms.date).getTime() || Date.now()
+        : Date.now();
 
     // Buscar el banco en BANCOS para usar sus reglas
     const banco = BANCOS.find((b) => b.nombre === nombreBanco);

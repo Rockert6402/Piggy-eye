@@ -21,7 +21,11 @@ function etiquetaFecha(fechaMs: number): string {
   const fecha = new Date(fechaMs);
   const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime();
   const inicioAyer = inicioHoy - 86_400_000;
-  const inicioSemana = inicioHoy - ((hoy.getDay() + 6) % 7) * 86_400_000;
+  // Semana arranca el lunes. getDay() devuelve 0=dom…6=sáb.
+  // El domingo (0) se trata como día 7 para que quede al final de la semana
+  // que termina ese día, no al inicio de una nueva (lunes→domingo).
+  const diaSemana = hoy.getDay() === 0 ? 6 : hoy.getDay() - 1;
+  const inicioSemana = inicioHoy - diaSemana * 86_400_000;
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).getTime();
   const inicioMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1).getTime();
 
