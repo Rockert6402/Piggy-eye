@@ -78,6 +78,10 @@ export function usePermisoSMS() {
     estado,
     cargando,
     activo: estado === 'authorized',
-    solicitar: solicitarPermisoSMS,
+    // Solicita el permiso y luego re-consulta el estado para que la UI refleje el resultado
+    solicitar: async () => {
+      await solicitarPermisoSMS();
+      await revisar();
+    },
   };
 }

@@ -55,7 +55,7 @@ export async function exportarCSV(): Promise<{ ok: boolean; mensaje?: string }> 
   const nombreArchivo = `piggy-eye-${new Date().toISOString().slice(0, 10)}.csv`;
   const ruta = `${FileSystem.cacheDirectory}${nombreArchivo}`;
 
-  await FileSystem.writeAsStringAsync(ruta, contenido, { encoding: FileSystem.EncodingType.UTF8 });
+  await FileSystem.writeAsStringAsync(ruta, contenido, { encoding: 'utf8' as any });
 
   await Share.share({
     title: 'Movimientos Piggy Eye',
