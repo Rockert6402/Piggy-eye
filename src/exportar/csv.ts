@@ -8,8 +8,9 @@
  * el sistema operativo cuando sea necesario.
  */
 
-import { Share, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { listarGastos } from '../db/gastos';
 
 function escaparCSV(valor: string | number | null | undefined): string {
@@ -57,10 +58,15 @@ export async function exportarCSV(): Promise<{ ok: boolean; mensaje?: string }> 
 
   await FileSystem.writeAsStringAsync(ruta, contenido, { encoding: 'utf8' as any });
 
-  await Share.share({
-    title: 'Movimientos Piggy Eye',
-    url: ruta,
-    message: `Movimientos exportados desde Piggy Eye — ${todos.length} registros`,
+  const disponible = await Sharing.isAvailableAsync();
+  if (!disponible) {
+    return { ok: false, mensaje: 'El dispositivo no soporta compartir archivos.' };
+  }
+
+  await Sharing.shareAsync(ruta, {
+    mimeType: 'text/csv',
+    dialogTitle: 'Exportar movimientos',
+    UTI: 'public.comma-separated-values-text',
   });
 
   return { ok: true };
