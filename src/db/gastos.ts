@@ -50,6 +50,17 @@ export const CATEGORIAS = [
   'Otros',
 ] as const;
 
+export const CATEGORIAS_INGRESO = [
+  'Sin categoría',
+  'Salario',
+  'Freelance',
+  'Venta',
+  'Transferencia',
+  'Reembolso',
+  'Regalo',
+  'Otros',
+] as const;
+
 /**
  * Inserta un gasto. Devuelve el id nuevo, o null si era duplicado.
  *
