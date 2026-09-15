@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'chore: sincronizar package-lock.json con react-native 0.81.5 *)",
+      "Bash(npx expo *)",
+      "Bash(git commit -m 'fix: reescribir withAllowBackup usando withDangerousMod \\(edición directa del XML\\) *)",
+      "Bash(git commit -m 'chore: actualizar permisos de Claude en settings.local.json *)"
     ]
   }
 }
