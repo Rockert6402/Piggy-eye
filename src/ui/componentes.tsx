@@ -8,10 +8,82 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colores, espacio, radio, tipografia, fechaLegible } from './tema';
 import { formatearCOP } from '../parser/monto';
 import type { Gasto } from '../db/gastos';
+
+/**
+ * Barra superior estilo WhatsApp.
+ * Muestra "Piggy Eye" en acento como título de la app, el nombre de la
+ * sección como subtítulo, y un botón de acción opcional a la derecha.
+ */
+export function Cabecera({
+  seccion,
+  accion,
+}: {
+  seccion: string;
+  accion?: { icono: React.ComponentProps<typeof Ionicons>['name']; alPresionar: () => void };
+}) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[cab.contenedor, { paddingTop: insets.top }]}>
+      <View style={cab.barra}>
+        <View style={cab.textos}>
+          <Text style={cab.appNombre}>Piggy Eye</Text>
+          <Text style={cab.seccion}>{seccion}</Text>
+        </View>
+        {accion && (
+          <Pressable
+            onPress={accion.alPresionar}
+            accessibilityRole="button"
+            style={({ pressed }) => [cab.botonAccion, pressed && { opacity: 0.6 }]}
+          >
+            <Ionicons name={accion.icono} size={24} color={colores.acento} />
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const cab = StyleSheet.create({
+  contenedor: {
+    backgroundColor: colores.superficie,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colores.borde,
+  },
+  barra: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: espacio.md,
+  },
+  textos: { flex: 1, gap: 1 },
+  appNombre: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colores.acento,
+    letterSpacing: -0.5,
+  },
+  seccion: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: colores.textoTenue,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  botonAccion: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+});
 
 export function Tarjeta({
   children,

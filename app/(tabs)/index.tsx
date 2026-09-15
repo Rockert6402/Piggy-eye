@@ -16,7 +16,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colores, espacio, radio, tipografia } from '../../src/ui/tema';
-import { Tarjeta, Boton } from '../../src/ui/componentes';
+import { Cabecera, Tarjeta, Boton } from '../../src/ui/componentes';
 import { formatearCOP } from '../../src/parser/monto';
 import {
   resumenDashboard,
@@ -71,7 +71,11 @@ export default function Dashboard() {
   const maximo = Math.max(...serie.map((p) => p.total), 1);
 
   return (
-    <SafeAreaView style={e.pantalla} edges={['top']}>
+    <SafeAreaView style={e.pantalla} edges={[]}>
+      <Cabecera
+        seccion="Resumen"
+        accion={{ icono: 'add-circle-outline', alPresionar: () => router.push('/gasto/nuevo') }}
+      />
       <ScrollView
         contentContainerStyle={e.contenido}
         refreshControl={

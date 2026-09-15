@@ -6,7 +6,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colores, espacio, tipografia } from '../../src/ui/tema';
-import { FilaGasto, Vacio } from '../../src/ui/componentes';
+import { Cabecera, FilaGasto, Vacio } from '../../src/ui/componentes';
 import { listarGastos, type Gasto } from '../../src/db/gastos';
 
 const PAGINA = 40;
@@ -40,8 +40,11 @@ export default function Gastos() {
   };
 
   return (
-    <SafeAreaView style={e.pantalla} edges={['top']}>
-      <Text style={e.titulo}>Movimientos</Text>
+    <SafeAreaView style={e.pantalla} edges={[]}>
+      <Cabecera
+        seccion="Movimientos"
+        accion={{ icono: 'add-circle-outline', alPresionar: () => router.push('/gasto/nuevo') }}
+      />
       <FlatList
         data={gastos}
         keyExtractor={(g) => String(g.id)}
@@ -72,10 +75,4 @@ export default function Gastos() {
 
 const e = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colores.fondo },
-  titulo: {
-    ...tipografia.titulo,
-    color: colores.texto,
-    paddingHorizontal: espacio.md,
-    paddingVertical: espacio.md,
-  },
 });

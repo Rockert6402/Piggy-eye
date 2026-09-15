@@ -12,7 +12,7 @@ import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colores, espacio, radio, tipografia, fechaLegible } from '../../src/ui/tema';
-import { Boton, Tarjeta } from '../../src/ui/componentes';
+import { Boton, Cabecera, Tarjeta } from '../../src/ui/componentes';
 import { usePermisoNotificaciones } from '../../src/notificaciones/permisos';
 import {
   listarDiagnostico,
@@ -51,9 +51,9 @@ export default function Ajustes() {
   );
 
   return (
-    <SafeAreaView style={e.pantalla} edges={['top']}>
+    <SafeAreaView style={e.pantalla} edges={[]}>
+      <Cabecera seccion="Ajustes" />
       <ScrollView contentContainerStyle={e.contenido}>
-        <Text style={e.titulo}>Ajustes</Text>
 
         <Tarjeta style={e.bloque}>
           <Text style={e.encabezado}>Captura automática</Text>
@@ -158,7 +158,6 @@ export default function Ajustes() {
 const e = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colores.fondo },
   contenido: { padding: espacio.md, gap: espacio.md, paddingBottom: espacio.xl },
-  titulo: { ...tipografia.titulo, color: colores.texto, marginBottom: espacio.xs },
   bloque: { gap: espacio.sm },
   encabezado: { ...tipografia.etiqueta, fontSize: 15, color: colores.texto },
   detalle: { ...tipografia.menudo, color: colores.textoSuave, lineHeight: 18 },

@@ -20,7 +20,7 @@ import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colores, espacio, radio, tipografia, fechaLegible } from '../../src/ui/tema';
-import { Boton, Tarjeta, Vacio } from '../../src/ui/componentes';
+import { Boton, Cabecera, Tarjeta, Vacio } from '../../src/ui/componentes';
 import { normalizarMonto, formatearCOP } from '../../src/parser/monto';
 import {
   listarPendientes,
@@ -73,8 +73,8 @@ export default function Pendientes() {
   };
 
   return (
-    <SafeAreaView style={e.pantalla} edges={['top']}>
-      <Text style={e.titulo}>Por confirmar</Text>
+    <SafeAreaView style={e.pantalla} edges={[]}>
+      <Cabecera seccion="Por confirmar" />
       <FlatList
         data={items}
         keyExtractor={(p) => String(p.id)}
@@ -187,12 +187,6 @@ export default function Pendientes() {
 
 const e = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colores.fondo },
-  titulo: {
-    ...tipografia.titulo,
-    color: colores.texto,
-    paddingHorizontal: espacio.md,
-    paddingVertical: espacio.md,
-  },
   lista: { padding: espacio.md, gap: espacio.md, paddingBottom: espacio.xl },
   tarjeta: { gap: espacio.sm },
   meta: { ...tipografia.menudo, color: colores.textoTenue },
