@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Piggy Eye",
+    "slug": "piggy-eye",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "piggyeye",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "platforms": ["android", "ios", "web"],
+    "android": {
+      "package": "co.edu.tdea.piggyeye",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0E1B1F"
+      }
+    },
+    "plugins": ["expo-router", "expo-sqlite"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
