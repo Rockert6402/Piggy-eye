@@ -6,18 +6,30 @@
     "orientation": "portrait",
     "scheme": "piggyeye",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
-    "platforms": ["android", "ios", "web"],
+    "newArchEnabled": false,
+    "platforms": [
+      "android",
+      "ios",
+      "web"
+    ],
     "android": {
       "package": "co.edu.tdea.piggyeye",
-      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#0E1B1F"
       }
     },
-    "plugins": ["expo-router", "expo-sqlite"],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite"
+    ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e768c1e6-ad7e-4d92-83f9-b49b789a7c79"
+      }
     }
   }
 }
