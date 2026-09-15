@@ -1,12 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import { Tabs, useFocusEffect } from 'expo-router';
 import { StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colores, tipografia } from '../../src/ui/tema';
 import { contarPendientes } from '../../src/db/pendientes';
 
 export default function Pestanas() {
   const [pendientes, setPendientes] = useState(0);
+  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     useCallback(() => {
@@ -22,8 +24,8 @@ export default function Pestanas() {
           backgroundColor: colores.superficie,
           borderTopColor: colores.borde,
           borderTopWidth: StyleSheet.hairlineWidth,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
           paddingTop: 8,
         },
         tabBarActiveTintColor: colores.acento,
