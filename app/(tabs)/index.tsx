@@ -113,13 +113,30 @@ export default function Dashboard() {
         )}
 
         <View style={e.encabezado}>
-          <Text style={e.etiquetaPrincipal}>Gastado este mes</Text>
-          <Text style={e.cifraPrincipal}>
-            {formatearCOP(corte?.mes.total ?? 0)}
-          </Text>
+          <Text style={e.etiquetaPrincipal}>Balance este mes</Text>
+          {(() => {
+            const gastosMes = corte?.mes.total ?? 0;
+            const ingresosMes = corte?.ingresosMes.total ?? 0;
+            const balance = ingresosMes - gastosMes;
+            const colorBalance = balance >= 0 ? colores.ingreso : colores.atencion;
+            return (
+              <>
+                <Text style={[e.cifraPrincipal, { color: colorBalance }]}>
+                  {balance >= 0 ? '+' : ''}{formatearCOP(balance)}
+                </Text>
+                <View style={e.desgloseMes}>
+                  <Text style={e.desgloseMesTexto}>
+                    <Text style={{ color: colores.ingreso }}>↓ {formatearCOP(ingresosMes)}</Text>
+                    {'  '}
+                    <Text style={{ color: colores.acento }}>↑ {formatearCOP(gastosMes)}</Text>
+                  </Text>
+                </View>
+              </>
+            );
+          })()}
           <Text style={e.subCifra}>
-            {corte?.mes.cantidad ?? 0}{' '}
-            {corte?.mes.cantidad === 1 ? 'movimiento' : 'movimientos'}
+            {(corte?.mes.cantidad ?? 0) + (corte?.ingresosMes.cantidad ?? 0)}{' '}
+            movimientos este mes
           </Text>
         </View>
 
@@ -184,7 +201,7 @@ export default function Dashboard() {
         )}
 
         <Boton
-          texto="Anotar un gasto en efectivo"
+          texto="Anotar un movimiento"
           alPresionar={() => router.push('/gasto/nuevo')}
           variante="secundario"
         />
@@ -213,6 +230,8 @@ const e = StyleSheet.create({
   encabezado: { paddingVertical: espacio.lg, gap: 4 },
   etiquetaPrincipal: { ...tipografia.etiqueta, color: colores.textoSuave },
   cifraPrincipal: { ...tipografia.cifraGrande, color: colores.acento },
+  desgloseMes: { marginTop: 2 },
+  desgloseMesTexto: { ...tipografia.menudo, color: colores.textoSuave },
   subCifra: { ...tipografia.menudo, color: colores.textoTenue },
 
   duo: { flexDirection: 'row', gap: espacio.sm },

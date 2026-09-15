@@ -27,6 +27,7 @@ import {
   editarGasto,
   eliminarGasto,
   CATEGORIAS,
+  CATEGORIAS_INGRESO,
   type Gasto,
 } from '../../src/db/gastos';
 
@@ -167,7 +168,7 @@ export default function DetalleGasto() {
             <View style={{ gap: espacio.sm }}>
               <Text style={e.etiqueta}>Categoría</Text>
               <View style={e.chips}>
-                {CATEGORIAS.map((c) => (
+                {(gasto.tipo === 'ingreso' ? CATEGORIAS_INGRESO : CATEGORIAS).map((c) => (
                   <Pressable
                     key={c}
                     onPress={() => setCategoria(c)}

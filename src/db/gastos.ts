@@ -170,10 +170,24 @@ export async function totalEntre(desde: number, hasta: number): Promise<Resumen>
   return fila ?? { total: 0, cantidad: 0 };
 }
 
+/** Total ingresado entre dos instantes. */
+export async function totalIngresosEntre(desde: number, hasta: number): Promise<Resumen> {
+  const bd = await abrirBD();
+  const fila = await bd.getFirstAsync<Resumen>(
+    `SELECT COALESCE(SUM(monto), 0) AS total, COUNT(*) AS cantidad
+       FROM gastos
+      WHERE tipo = 'ingreso' AND fecha >= ? AND fecha < ?`,
+    desde,
+    hasta
+  );
+  return fila ?? { total: 0, cantidad: 0 };
+}
+
 export interface CorteTemporal {
   hoy: Resumen;
   semana: Resumen;
   mes: Resumen;
+  ingresosMes: Resumen;
 }
 
 /** Los tres cortes que pide la HU-05, en una sola pasada por la app. */
@@ -189,13 +203,14 @@ export async function resumenDashboard(ahora = new Date()): Promise<CorteTempora
   const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
   const fin = ahora.getTime() + 1;
 
-  const [hoy, semana, mes] = await Promise.all([
+  const [hoy, semana, mes, ingresosMes] = await Promise.all([
     totalEntre(inicioDia.getTime(), fin),
     totalEntre(inicioSemana.getTime(), fin),
     totalEntre(inicioMes.getTime(), fin),
+    totalIngresosEntre(inicioMes.getTime(), fin),
   ]);
 
-  return { hoy, semana, mes };
+  return { hoy, semana, mes, ingresosMes };
 }
 
 export interface GastoPorCategoria {
