@@ -9,7 +9,7 @@
  */
 
 import { Share, Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { listarGastos } from '../db/gastos';
 
 function escaparCSV(valor: string | number | null | undefined): string {
