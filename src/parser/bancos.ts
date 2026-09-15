@@ -182,6 +182,148 @@ export const BANCOS: PatronBanco[] = [
       },
     ],
   },
+  {
+    nombre: 'Nu (Nubank)',
+    // Package verificado en Play Store Colombia: com.nu.production
+    paquetes: ['com.nu.production'],
+    reglas: [
+      {
+        id: 'nu-compra',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`(?:compraste|compra\s+de)\s+${MONTO}\s+en\s+${COMERCIO}${FIN}`,
+          'i'
+        ),
+      },
+      {
+        id: 'nu-pago',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`pagaste\s+${MONTO}\s+(?:en|a)\s+${COMERCIO}${FIN}`,
+          'i'
+        ),
+      },
+      {
+        id: 'nu-transferencia-salida',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`(?:enviaste|transferiste)\s+${MONTO}\s+a\s+${COMERCIO}${FIN}`,
+          'i'
+        ),
+      },
+      {
+        id: 'nu-transferencia-entrada',
+        tipo: 'ingreso',
+        patron: new RegExp(
+          String.raw`(?:recibiste|te\s+enviaron)\s+${MONTO}`,
+          'i'
+        ),
+      },
+    ],
+  },
+  {
+    nombre: 'PayPal',
+    // PayPal envía notificaciones desde su propia app; los pagos internacionales
+    // suelen venir en USD — el parser extrae el monto tal cual, el usuario ve el valor.
+    paquetes: ['com.paypal.android.p2pmobile'],
+    reglas: [
+      {
+        id: 'paypal-pago',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`(?:you\s+sent|pagaste|sent)\s+(?:USD\s+|COP\s+|US\$|COP\$)?${MONTO}\s+(?:to|a)\s+${COMERCIO}${FIN}`,
+          'i'
+        ),
+      },
+      {
+        id: 'paypal-cobro',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`(?:payment\s+of|cobro\s+de|charged)\s+(?:USD\s+|COP\s+|US\$|COP\$)?${MONTO}`,
+          'i'
+        ),
+      },
+      {
+        id: 'paypal-recibido',
+        tipo: 'ingreso',
+        patron: new RegExp(
+          String.raw`(?:you\s+received|recibiste)\s+(?:USD\s+|COP\s+|US\$|COP\$)?${MONTO}`,
+          'i'
+        ),
+      },
+    ],
+  },
+  {
+    nombre: 'Rappi Pay',
+    // Rappi usa una sola app para pedidos y pagos; las notificaciones de pago
+    // vienen del mismo paquete que los pedidos.
+    paquetes: ['com.rappi.android', 'com.rappi.appcol'],
+    reglas: [
+      {
+        id: 'rappi-pago',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`(?:pagaste|pago\s+de)\s+${MONTO}\s+(?:en|a|con\s+Rappi\s+Pay)`,
+          'i'
+        ),
+      },
+      {
+        id: 'rappi-cargo',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`cargo\s+de\s+${MONTO}\s+en\s+${COMERCIO}${FIN}`,
+          'i'
+        ),
+      },
+    ],
+  },
+  {
+    nombre: 'Scotiabank Colpatria',
+    paquetes: ['com.colpatria.app', 'co.com.scotiabank.colpatria'],
+    reglas: [
+      {
+        id: 'colpatria-compra',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`compra\s+(?:por\s+)?${MONTO}\s+en\s+${COMERCIO}${FIN}`,
+          'i'
+        ),
+      },
+      {
+        id: 'colpatria-avance',
+        tipo: 'gasto',
+        patron: new RegExp(String.raw`avance\s+(?:por\s+)?${MONTO}`, 'i'),
+      },
+    ],
+  },
+  {
+    nombre: 'Banco Popular',
+    paquetes: ['com.popular.bancamovil', 'co.com.bancopopular.app'],
+    reglas: [
+      {
+        id: 'popular-compra',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`compra\s+(?:aprobada\s+)?(?:por\s+)?${MONTO}\s+en\s+${COMERCIO}${FIN}`,
+          'i'
+        ),
+      },
+    ],
+  },
+  {
+    nombre: 'Banco de Occidente',
+    paquetes: ['com.occidente.bancamovil', 'com.bancooccidente.app'],
+    reglas: [
+      {
+        id: 'occidente-compra',
+        tipo: 'gasto',
+        patron: new RegExp(
+          String.raw`compra\s+(?:por\s+)?${MONTO}\s+en\s+${COMERCIO}${FIN}`,
+          'i'
+        ),
+      },
+    ],
+  },
 ];
 
 /**

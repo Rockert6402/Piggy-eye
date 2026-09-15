@@ -53,7 +53,9 @@ const RUIDO = [
  * Sin al menos una de estas, no procesamos.
  */
 const OPERACION = [
+  // Español
   'compra',
+  'compraste',
   'pagaste',
   'pago',
   'transferencia',
@@ -68,6 +70,12 @@ const OPERACION = [
   'recibiste',
   'te enviaron',
   'avance',
+  // Inglés (PayPal y apps internacionales)
+  'you sent',
+  'you received',
+  'payment of',
+  'charged',
+  'sent',
 ];
 
 export interface ResultadoFiltro {
