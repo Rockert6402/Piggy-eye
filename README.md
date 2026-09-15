@@ -4,8 +4,6 @@ App Android de control de gastos personales que registra automáticamente las
 compras leyendo las notificaciones del banco, con registro manual para efectivo
 y un resumen por día, semana y mes.
 
-Proyecto de Gestión de Proyectos Ágiles · Grupo 3 · Tecnológico de Antioquia.
-
 ---
 
 ## Lo primero que tienen que saber
