@@ -1,16 +1,4 @@
-/**
- * Exportación de movimientos a CSV.
- *
- * Usa la API nativa de Android para compartir el archivo a través del
- * intent de compartir del sistema (Share). No requiere permisos extra
- * porque nunca escribe en almacenamiento externo visible al usuario;
- * el archivo se crea en el directorio de caché de la app y lo borra
- * el sistema operativo cuando sea necesario.
- */
-
-import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
+import { Platform, Share } from 'react-native';
 import { listarGastos } from '../db/gastos';
 
 function escaparCSV(valor: string | number | null | undefined): string {
@@ -53,20 +41,10 @@ export async function exportarCSV(): Promise<{ ok: boolean; mensaje?: string }> 
   );
 
   const contenido = [cabecera, ...filas].join('\n');
-  const nombreArchivo = `piggy-eye-${new Date().toISOString().slice(0, 10)}.csv`;
-  const ruta = `${FileSystem.cacheDirectory}${nombreArchivo}`;
 
-  await FileSystem.writeAsStringAsync(ruta, contenido, { encoding: 'utf8' as any });
-
-  const disponible = await Sharing.isAvailableAsync();
-  if (!disponible) {
-    return { ok: false, mensaje: 'El dispositivo no soporta compartir archivos.' };
-  }
-
-  await Sharing.shareAsync(ruta, {
-    mimeType: 'text/csv',
-    dialogTitle: 'Exportar movimientos',
-    UTI: 'public.comma-separated-values-text',
+  await Share.share({
+    title: `piggy-eye-${new Date().toISOString().slice(0, 10)}.csv`,
+    message: contenido,
   });
 
   return { ok: true };
