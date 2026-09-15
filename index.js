@@ -15,5 +15,4 @@ AppRegistry.registerHeadlessTask(
   () => manejarNotificacion
 );
 
-// expo-router toma el control desde acá.
 import 'expo-router/entry';
