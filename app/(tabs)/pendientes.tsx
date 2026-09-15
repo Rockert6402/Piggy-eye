@@ -81,6 +81,7 @@ export default function Pendientes() {
         contentContainerStyle={e.lista}
         ListEmptyComponent={
           <Vacio
+            icono="checkmark-circle-outline"
             titulo="Nada por confirmar"
             detalle="Acá van a llegar las notificaciones bancarias que Piggy Eye no logre interpretar por sí solo."
           />

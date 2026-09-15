@@ -55,6 +55,7 @@ export default function Gastos() {
         onEndReachedThreshold={0.4}
         ListEmptyComponent={
           <Vacio
+            icono="receipt-outline"
             titulo="Todavía no hay movimientos"
             detalle="Cuando llegue una notificación de tu banco aparecerá acá. También puedes anotar un gasto en efectivo."
             accion={{

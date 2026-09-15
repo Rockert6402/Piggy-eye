@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Animated,
   Pressable,
   StyleSheet,
   Text,
@@ -7,6 +8,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colores, espacio, radio, tipografia, fechaLegible } from './tema';
 import { formatearCOP } from '../parser/monto';
 import type { Gasto } from '../db/gastos';
@@ -25,14 +27,21 @@ export function Tarjeta({
 export function Vacio({
   titulo,
   detalle,
+  icono,
   accion,
 }: {
   titulo: string;
   detalle: string;
+  icono?: React.ComponentProps<typeof Ionicons>['name'];
   accion?: { texto: string; alPresionar: () => void };
 }) {
   return (
     <View style={e.vacio}>
+      {icono && (
+        <View style={e.vacioIconoFondo}>
+          <Ionicons name={icono} size={32} color={colores.textoTenue} />
+        </View>
+      )}
       <Text style={e.vacioTitulo}>{titulo}</Text>
       <Text style={e.vacioDetalle}>{detalle}</Text>
       {accion && (
@@ -53,6 +62,16 @@ export function Boton({
   variante?: 'principal' | 'secundario' | 'peligro';
   deshabilitado?: boolean;
 }) {
+  const escala = React.useRef(new Animated.Value(1)).current;
+
+  const enPresionar = () => {
+    Animated.spring(escala, { toValue: 0.96, useNativeDriver: true, speed: 40 }).start();
+  };
+  const alSoltar = () => {
+    Animated.spring(escala, { toValue: 1, useNativeDriver: true, speed: 30 }).start();
+    if (!deshabilitado) alPresionar();
+  };
+
   const fondo =
     variante === 'principal'
       ? colores.acento
@@ -67,20 +86,35 @@ export function Boton({
         : colores.texto;
 
   return (
-    <Pressable
-      onPress={alPresionar}
-      disabled={deshabilitado}
-      accessibilityRole="button"
-      style={({ pressed }) => [
-        e.boton,
-        { backgroundColor: fondo, opacity: deshabilitado ? 0.4 : pressed ? 0.75 : 1 },
-        variante === 'peligro' && { borderWidth: 1, borderColor: colores.peligro },
-      ]}
-    >
-      <Text style={[e.botonTexto, { color }]}>{texto}</Text>
-    </Pressable>
+    <Animated.View style={{ transform: [{ scale: escala }], opacity: deshabilitado ? 0.4 : 1 }}>
+      <Pressable
+        onPressIn={enPresionar}
+        onPressOut={alSoltar}
+        disabled={deshabilitado}
+        accessibilityRole="button"
+        style={[
+          e.boton,
+          { backgroundColor: fondo },
+          variante === 'peligro' && { borderWidth: 1, borderColor: colores.peligro },
+        ]}
+      >
+        <Text style={[e.botonTexto, { color }]}>{texto}</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
+
+const CATEGORIA_COLOR: Record<string, string> = {
+  Alimentación: '#6FD0A8',
+  Transporte: '#70B8FF',
+  Salud: '#E8735F',
+  Entretenimiento: '#C97EF5',
+  Ropa: '#F2A0B5',
+  Hogar: '#E9B949',
+  Educación: '#5BC8D4',
+  Servicios: '#9FB6BC',
+  'Sin categoría': '#6B8992',
+};
 
 /** Fila de la lista de gastos. */
 export function FilaGasto({
@@ -91,6 +125,8 @@ export function FilaGasto({
   alPresionar: () => void;
 }) {
   const esIngreso = gasto.tipo === 'ingreso';
+  const franjaColor = esIngreso ? colores.ingreso : colores.acentoProfundo;
+  const catColor = CATEGORIA_COLOR[gasto.categoria ?? ''] ?? colores.textoTenue;
 
   return (
     <Pressable
@@ -98,25 +134,33 @@ export function FilaGasto({
       accessibilityRole="button"
       style={({ pressed }) => [e.fila, pressed && { backgroundColor: colores.superficieAlta }]}
     >
-      <View style={e.filaIzquierda}>
-        <Text style={e.filaComercio} numberOfLines={1}>
-          {gasto.comercio || 'Sin comercio'}
-        </Text>
-        <Text style={e.filaMeta} numberOfLines={1}>
-          {fechaLegible(gasto.fecha)}
-          {gasto.banco ? ` · ${gasto.banco}` : ''}
-          {gasto.origen === 'manual' ? ' · a mano' : ''}
+      {/* Franja de color izquierda según tipo */}
+      <View style={[e.franja, { backgroundColor: franjaColor }]} />
+
+      <View style={e.filaContenido}>
+        <View style={e.filaIzquierda}>
+          <Text style={e.filaComercio} numberOfLines={1}>
+            {gasto.comercio || 'Sin comercio'}
+          </Text>
+          <View style={e.filaMeta}>
+            {/* Pill de categoría */}
+            <View style={[e.catPill, { borderColor: catColor }]}>
+              <View style={[e.catPunto, { backgroundColor: catColor }]} />
+              <Text style={[e.catTexto, { color: catColor }]} numberOfLines={1}>
+                {gasto.categoria ?? 'Sin categoría'}
+              </Text>
+            </View>
+            <Text style={e.metaTexto} numberOfLines={1}>
+              {fechaLegible(gasto.fecha)}
+              {gasto.banco ? ` · ${gasto.banco}` : ''}
+              {gasto.origen === 'manual' ? ' · manual' : ''}
+            </Text>
+          </View>
+        </View>
+        <Text style={[e.filaMonto, esIngreso && { color: colores.ingreso }]}>
+          {esIngreso ? '+' : '−'}{formatearCOP(gasto.monto)}
         </Text>
       </View>
-      <Text
-        style={[
-          e.filaMonto,
-          esIngreso && { color: colores.ingreso },
-        ]}
-      >
-        {esIngreso ? '+' : ''}
-        {formatearCOP(gasto.monto)}
-      </Text>
     </Pressable>
   );
 }
@@ -129,11 +173,21 @@ const e = StyleSheet.create({
     borderWidth: 1,
     borderColor: colores.borde,
   },
+
   vacio: {
     alignItems: 'center',
     paddingVertical: espacio.xl,
     paddingHorizontal: espacio.lg,
     gap: espacio.sm,
+  },
+  vacioIconoFondo: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colores.superficieAlta,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: espacio.xs,
   },
   vacioTitulo: { ...tipografia.titulo, color: colores.texto, textAlign: 'center' },
   vacioDetalle: {
@@ -144,6 +198,7 @@ const e = StyleSheet.create({
     lineHeight: 21,
     marginBottom: espacio.sm,
   },
+
   boton: {
     paddingVertical: 13,
     paddingHorizontal: espacio.lg,
@@ -151,18 +206,45 @@ const e = StyleSheet.create({
     alignItems: 'center',
   },
   botonTexto: { ...tipografia.etiqueta, fontSize: 15 },
+
   fila: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colores.borde,
+    minHeight: 64,
+  },
+  franja: {
+    width: 3,
+    borderRadius: 2,
+    marginVertical: 10,
+    marginLeft: espacio.md,
+  },
+  filaContenido: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: espacio.md,
-    gap: espacio.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colores.borde,
+    paddingVertical: 12,
+    paddingHorizontal: espacio.sm,
+    gap: espacio.sm,
   },
-  filaIzquierda: { flex: 1, gap: 3 },
+  filaIzquierda: { flex: 1, gap: 5 },
   filaComercio: { ...tipografia.cuerpo, color: colores.texto, fontWeight: '500' },
-  filaMeta: { ...tipografia.menudo, color: colores.textoTenue },
+  filaMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  metaTexto: { ...tipografia.menudo, color: colores.textoTenue, flexShrink: 1 },
+
+  catPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  catPunto: { width: 5, height: 5, borderRadius: 3 },
+  catTexto: { fontSize: 10, fontWeight: '500' },
+
   filaMonto: { ...tipografia.cifra, color: colores.texto },
 });
