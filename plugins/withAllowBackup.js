@@ -1,26 +1,44 @@
-const { withAndroidManifest } = require('@expo/config-plugins');
+const { withDangerousMod } = require('@expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
 
 /**
- * Agrega tools:replace="android:allowBackup" al <application> del AndroidManifest
- * para resolver el merger conflict con react-native-android-notification-listener.
+ * Parcha AndroidManifest.xml después del prebuild para resolver el merger
+ * conflict con react-native-android-notification-listener (allowBackup=false).
+ * Usa withDangerousMod (edición directa del archivo) en lugar de withAndroidManifest
+ * porque xml2js serializa incorrectamente atributos con namespace (tools:replace).
  */
-module.exports = withAndroidManifest((config) => {
-  const manifest = config.modResults;
-  // Solo aplica en contexto de build Android (modResults puede estar vacío en expo config --json)
-  if (!manifest?.manifest?.application?.[0]) {
-    return config;
-  }
+module.exports = (config) =>
+  withDangerousMod(config, [
+    'android',
+    (cfg) => {
+      const manifestPath = path.join(
+        cfg.modRequest.platformProjectRoot,
+        'app',
+        'src',
+        'main',
+        'AndroidManifest.xml'
+      );
 
-  const app = manifest.manifest.application[0];
+      let xml = fs.readFileSync(manifestPath, 'utf8');
 
-  if (!manifest.manifest.$['xmlns:tools']) {
-    manifest.manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
-  }
+      // 1. Agregar xmlns:tools al elemento <manifest> si no existe
+      if (!xml.includes('xmlns:tools')) {
+        xml = xml.replace(
+          /(<manifest\b[^>]*?)>/,
+          '$1\n    xmlns:tools="http://schemas.android.com/tools">'
+        );
+      }
 
-  const prev = app.$['tools:replace'];
-  app.$['tools:replace'] = prev
-    ? prev + ',android:allowBackup'
-    : 'android:allowBackup';
+      // 2. Agregar tools:replace al elemento <application> si no existe
+      if (!xml.includes('tools:replace')) {
+        xml = xml.replace(
+          /(<application\b)/,
+          '$1\n        tools:replace="android:allowBackup"'
+        );
+      }
 
-  return config;
-});
+      fs.writeFileSync(manifestPath, xml, 'utf8');
+      return cfg;
+    },
+  ]);
