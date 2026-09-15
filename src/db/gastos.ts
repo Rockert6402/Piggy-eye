@@ -253,3 +253,33 @@ export async function serieDiaria(dias = 14): Promise<PuntoDiario[]> {
     desde
   );
 }
+
+export interface PuntoDiarioDoble {
+  dia: string;
+  gastos: number;
+  ingresos: number;
+}
+
+/** Serie de los últimos N días con gastos e ingresos separados. */
+export async function serieDiariaDoble(dias = 14): Promise<PuntoDiarioDoble[]> {
+  const bd = await abrirBD();
+  const desde = Date.now() - dias * 86_400_000;
+  const filas = await bd.getAllAsync<{ dia: string; tipo: string; total: number }>(
+    `SELECT date(fecha / 1000, 'unixepoch', 'localtime') AS dia,
+            tipo,
+            SUM(monto) AS total
+       FROM gastos
+      WHERE fecha >= ?
+      GROUP BY dia, tipo
+      ORDER BY dia ASC`,
+    desde
+  );
+  const mapa = new Map<string, PuntoDiarioDoble>();
+  for (const f of filas) {
+    if (!mapa.has(f.dia)) mapa.set(f.dia, { dia: f.dia, gastos: 0, ingresos: 0 });
+    const p = mapa.get(f.dia)!;
+    if (f.tipo === 'gasto') p.gastos = f.total;
+    else p.ingresos = f.total;
+  }
+  return Array.from(mapa.values());
+}

@@ -21,11 +21,12 @@ import { formatearCOP } from '../../src/parser/monto';
 import {
   resumenDashboard,
   totalesPorCategoria,
-  serieDiaria,
+  serieDiariaDoble,
   type CorteTemporal,
   type GastoPorCategoria,
-  type PuntoDiario,
+  type PuntoDiarioDoble,
 } from '../../src/db/gastos';
+import { presupuestosConGasto, type PresupuestoConGasto } from '../../src/db/presupuestos';
 import { contarPendientes } from '../../src/db/pendientes';
 import { usePermisoNotificaciones } from '../../src/notificaciones/permisos';
 import { consultarPermisoSMS, leerSMSBancarios } from '../../src/sms';
@@ -36,38 +37,35 @@ export default function Dashboard() {
 
   const [corte, setCorte] = useState<CorteTemporal | null>(null);
   const [categorias, setCategorias] = useState<GastoPorCategoria[]>([]);
-  const [serie, setSerie] = useState<PuntoDiario[]>([]);
+  const [serie, setSerie] = useState<PuntoDiarioDoble[]>([]);
+  const [presupuestos, setPresupuestos] = useState<PresupuestoConGasto[]>([]);
   const [pendientes, setPendientes] = useState(0);
   const [refrescando, setRefrescando] = useState(false);
 
   const cargar = useCallback(async () => {
-    // Procesar SMS bancarios si hay permiso, antes de leer el resumen
     const permisoSMS = await consultarPermisoSMS();
-    if (permisoSMS === 'authorized') {
-      await leerSMSBancarios(30);
-    }
+    if (permisoSMS === 'authorized') await leerSMSBancarios(30);
 
     const inicioMes = new Date();
     inicioMes.setDate(1);
     inicioMes.setHours(0, 0, 0, 0);
+    const fin = Date.now() + 1;
 
-    const [r, c, s, p] = await Promise.all([
+    const [r, c, s, p, pr] = await Promise.all([
       resumenDashboard(),
-      totalesPorCategoria(inicioMes.getTime(), Date.now() + 1),
-      serieDiaria(14),
+      totalesPorCategoria(inicioMes.getTime(), fin),
+      serieDiariaDoble(14),
       contarPendientes(),
+      presupuestosConGasto(inicioMes.getTime(), fin),
     ]);
     setCorte(r);
     setCategorias(c);
     setSerie(s);
     setPendientes(p);
+    setPresupuestos(pr);
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      cargar();
-    }, [cargar])
-  );
+  useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
 
   const refrescar = async () => {
     setRefrescando(true);
@@ -75,7 +73,7 @@ export default function Dashboard() {
     setRefrescando(false);
   };
 
-  const maximo = Math.max(...serie.map((p) => p.total), 1);
+  const maxValor = Math.max(...serie.flatMap((p) => [p.gastos, p.ingresos]), 1);
 
   return (
     <SafeAreaView style={e.pantalla} edges={[]}>
@@ -86,11 +84,7 @@ export default function Dashboard() {
       <ScrollView
         contentContainerStyle={e.contenido}
         refreshControl={
-          <RefreshControl
-            refreshing={refrescando}
-            onRefresh={refrescar}
-            tintColor={colores.textoSuave}
-          />
+          <RefreshControl refreshing={refrescando} onRefresh={refrescar} tintColor={colores.textoSuave} />
         }
       >
         {!permiso.cargando && !permiso.activo && (
@@ -98,9 +92,8 @@ export default function Dashboard() {
             <Tarjeta style={e.alerta}>
               <Text style={e.alertaTitulo}>La captura automática está apagada</Text>
               <Text style={e.alertaTexto}>
-                Piggy Eye necesita acceso a las notificaciones para registrar tus
-                compras. Mientras esté apagado, solo verás los gastos que anotes
-                a mano. Toca aquí para activarlo.
+                Piggy Eye necesita acceso a las notificaciones para registrar tus compras.
+                Toca aquí para activarlo.
               </Text>
             </Tarjeta>
           </Pressable>
@@ -110,15 +103,14 @@ export default function Dashboard() {
           <Pressable onPress={() => router.push('/(tabs)/pendientes')}>
             <Tarjeta style={e.aviso}>
               <Text style={e.avisoTexto}>
-                {pendientes === 1
-                  ? '1 notificación quedó sin interpretar'
-                  : `${pendientes} notificaciones quedaron sin interpretar`}
+                {pendientes === 1 ? '1 notificación sin interpretar' : `${pendientes} notificaciones sin interpretar`}
               </Text>
               <Text style={e.avisoAccion}>Revisar</Text>
             </Tarjeta>
           </Pressable>
         )}
 
+        {/* Balance del mes */}
         <View style={e.encabezado}>
           <Text style={e.etiquetaPrincipal}>Balance este mes</Text>
           {(() => {
@@ -142,11 +134,11 @@ export default function Dashboard() {
             );
           })()}
           <Text style={e.subCifra}>
-            {(corte?.mes.cantidad ?? 0) + (corte?.ingresosMes.cantidad ?? 0)}{' '}
-            movimientos este mes
+            {(corte?.mes.cantidad ?? 0) + (corte?.ingresosMes.cantidad ?? 0)} movimientos este mes
           </Text>
         </View>
 
+        {/* Tarjetas hoy / semana */}
         <View style={e.duo}>
           <Tarjeta style={e.mitad}>
             <Text style={e.etiqueta}>Hoy</Text>
@@ -154,49 +146,112 @@ export default function Dashboard() {
           </Tarjeta>
           <Tarjeta style={e.mitad}>
             <Text style={e.etiqueta}>Esta semana</Text>
-            <Text style={e.cifraMedia}>
-              {formatearCOP(corte?.semana.total ?? 0)}
-            </Text>
+            <Text style={e.cifraMedia}>{formatearCOP(corte?.semana.total ?? 0)}</Text>
           </Tarjeta>
         </View>
 
+        {/* Gráfica ingresos vs gastos */}
         {serie.length > 0 && (
           <Tarjeta>
-            <Text style={e.etiqueta}>Últimos 14 días</Text>
+            <View style={e.graficaCabecera}>
+              <Text style={e.etiqueta}>Últimos 14 días</Text>
+              <View style={e.leyenda}>
+                <View style={[e.leyendaPunto, { backgroundColor: colores.ingreso }]} />
+                <Text style={e.leyendaTexto}>Ingresos</Text>
+                <View style={[e.leyendaPunto, { backgroundColor: colores.acentoProfundo }]} />
+                <Text style={e.leyendaTexto}>Gastos</Text>
+              </View>
+            </View>
             <View style={e.grafica}>
               {serie.map((punto) => (
                 <View key={punto.dia} style={e.columna}>
-                  <View
-                    style={[
-                      e.barra,
-                      { height: Math.max(3, (punto.total / maximo) * 90) },
-                    ]}
-                  />
+                  <View style={e.barras}>
+                    {punto.ingresos > 0 && (
+                      <View
+                        style={[
+                          e.barra,
+                          {
+                            height: Math.max(3, (punto.ingresos / maxValor) * 80),
+                            backgroundColor: colores.ingreso,
+                          },
+                        ]}
+                      />
+                    )}
+                    {punto.gastos > 0 && (
+                      <View
+                        style={[
+                          e.barra,
+                          {
+                            height: Math.max(3, (punto.gastos / maxValor) * 80),
+                            backgroundColor: colores.acentoProfundo,
+                          },
+                        ]}
+                      />
+                    )}
+                  </View>
                 </View>
               ))}
             </View>
           </Tarjeta>
         )}
 
+        {/* Presupuestos */}
+        {presupuestos.length > 0 && (
+          <Tarjeta>
+            <View style={e.presupuestoCabecera}>
+              <Text style={e.etiqueta}>Presupuestos del mes</Text>
+              <Pressable onPress={() => router.push('/presupuesto/gestionar')}>
+                <Text style={e.editarLink}>Editar</Text>
+              </Pressable>
+            </View>
+            <View style={e.listaPresupuestos}>
+              {presupuestos.map((p) => {
+                const excedido = p.porcentaje > 100;
+                const colorBarra = excedido ? colores.peligro : p.porcentaje > 80 ? colores.atencion : colores.ingreso;
+                return (
+                  <View key={p.categoria} style={e.filaPresupuesto}>
+                    <View style={e.presupuestoTitulo}>
+                      <Text style={e.nombreCategoria} numberOfLines={1}>{p.categoria}</Text>
+                      <Text style={[e.montoPresupuesto, excedido && { color: colores.peligro }]}>
+                        {formatearCOP(p.gastado)} / {formatearCOP(p.limite)}
+                      </Text>
+                    </View>
+                    <View style={e.barraFondo}>
+                      <View
+                        style={[
+                          e.barraRelleno,
+                          {
+                            width: `${Math.min(p.porcentaje, 100)}%`,
+                            backgroundColor: colorBarra,
+                          },
+                        ]}
+                      />
+                    </View>
+                    {excedido && (
+                      <Text style={e.excedidoTexto}>
+                        Excedido en {formatearCOP(p.gastado - p.limite)}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </Tarjeta>
+        )}
+
+        {/* Categorías */}
         {categorias.length > 0 && (
           <Tarjeta>
             <Text style={e.etiqueta}>Por categoría este mes</Text>
             <View style={e.listaCategorias}>
               {categorias.map((c) => (
                 <View key={c.categoria} style={e.filaCategoria}>
-                  <Text style={e.nombreCategoria} numberOfLines={1}>
-                    {c.categoria}
-                  </Text>
+                  <Text style={e.nombreCategoria} numberOfLines={1}>{c.categoria}</Text>
                   <View style={e.barraFondo}>
                     <View
                       style={[
                         e.barraRelleno,
-                        {
-                          width: `${Math.max(
-                            2,
-                            (c.total / (categorias[0]?.total || 1)) * 100
-                          )}%`,
-                        },
+                        { width: `${Math.max(2, (c.total / (categorias[0]?.total || 1)) * 100)}%` },
                       ]}
                     />
                   </View>
@@ -205,6 +260,17 @@ export default function Dashboard() {
               ))}
             </View>
           </Tarjeta>
+        )}
+
+        {presupuestos.length === 0 && (
+          <Pressable onPress={() => router.push('/presupuesto/gestionar')}>
+            <Tarjeta style={e.avisoPresupuesto}>
+              <Text style={e.avisoPresupuestoTexto}>
+                Agrega presupuestos por categoría para ver si estás dentro del límite cada mes.
+              </Text>
+              <Text style={e.avisoAccion}>Configurar</Text>
+            </Tarjeta>
+          </Pressable>
         )}
 
         <Boton
@@ -225,12 +291,7 @@ const e = StyleSheet.create({
   alertaTitulo: { ...tipografia.etiqueta, color: colores.atencion },
   alertaTexto: { ...tipografia.menudo, color: colores.textoSuave, lineHeight: 18 },
 
-  aviso: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
+  aviso: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
   avisoTexto: { ...tipografia.menudo, color: colores.textoSuave, flex: 1 },
   avisoAccion: { ...tipografia.etiqueta, color: colores.acento },
 
@@ -246,40 +307,31 @@ const e = StyleSheet.create({
   etiqueta: { ...tipografia.etiqueta, color: colores.textoSuave },
   cifraMedia: { ...tipografia.cifra, fontSize: 20, color: colores.texto },
 
-  grafica: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 100,
-    gap: 4,
-    marginTop: espacio.md,
-  },
+  graficaCabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  leyenda: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  leyendaPunto: { width: 8, height: 8, borderRadius: 4 },
+  leyendaTexto: { ...tipografia.menudo, color: colores.textoTenue },
+
+  grafica: { flexDirection: 'row', alignItems: 'flex-end', height: 90, gap: 3, marginTop: espacio.md },
   columna: { flex: 1, justifyContent: 'flex-end' },
-  barra: {
-    backgroundColor: colores.acentoProfundo,
-    borderRadius: 3,
-    width: '100%',
-  },
+  barras: { flexDirection: 'row', alignItems: 'flex-end', gap: 1, justifyContent: 'center' },
+  barra: { width: 5, borderRadius: 3 },
+
+  presupuestoCabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  editarLink: { ...tipografia.etiqueta, color: colores.acento },
+  listaPresupuestos: { gap: 12, marginTop: espacio.md },
+  filaPresupuesto: { gap: 5 },
+  presupuestoTitulo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  excedidoTexto: { ...tipografia.menudo, color: colores.peligro },
 
   listaCategorias: { gap: 10, marginTop: espacio.md },
   filaCategoria: { flexDirection: 'row', alignItems: 'center', gap: espacio.sm },
   nombreCategoria: { ...tipografia.menudo, color: colores.textoSuave, width: 84 },
-  barraFondo: {
-    flex: 1,
-    height: 6,
-    backgroundColor: colores.superficieAlta,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  barraRelleno: {
-    height: '100%',
-    backgroundColor: colores.acento,
-    borderRadius: 3,
-  },
-  montoCategoria: {
-    ...tipografia.menudo,
-    color: colores.texto,
-    fontVariant: ['tabular-nums'],
-    width: 78,
-    textAlign: 'right',
-  },
+  barraFondo: { flex: 1, height: 6, backgroundColor: colores.superficieAlta, borderRadius: 3, overflow: 'hidden' },
+  barraRelleno: { height: '100%', backgroundColor: colores.acento, borderRadius: 3 },
+  montoCategoria: { ...tipografia.menudo, color: colores.texto, fontVariant: ['tabular-nums'], width: 78, textAlign: 'right' },
+  montoPresupuesto: { ...tipografia.menudo, color: colores.textoSuave, fontVariant: ['tabular-nums'] },
+
+  avisoPresupuesto: { gap: 6 },
+  avisoPresupuestoTexto: { ...tipografia.menudo, color: colores.textoSuave, lineHeight: 18 },
 });

@@ -10,7 +10,7 @@
 import * as SQLite from 'expo-sqlite';
 
 const NOMBRE_BD = 'piggyeye.db';
-const VERSION_ESQUEMA = 1;
+const VERSION_ESQUEMA = 2;
 
 let instancia: SQLite.SQLiteDatabase | null = null;
 
@@ -85,6 +85,17 @@ async function migrar(bd: SQLite.SQLiteDatabase): Promise<void> {
         fecha    INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_diag_fecha ON diagnostico (fecha DESC);
+    `);
+  }
+
+  if (actual < 2) {
+    await bd.execAsync(`
+      CREATE TABLE IF NOT EXISTS presupuestos (
+        categoria  TEXT    PRIMARY KEY,
+        limite     REAL    NOT NULL CHECK (limite > 0),
+        creado_en  INTEGER NOT NULL,
+        editado_en INTEGER
+      );
     `);
   }
 

@@ -1,44 +1,39 @@
-/** Lista de movimientos. Punto de entrada a HU-08, HU-09 y HU-10. */
+/** Lista de movimientos con filtros y agrupación por fecha. */
 
-import React, { useCallback, useState } from 'react';
-import { SectionList, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Pressable, SectionList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colores, espacio, tipografia } from '../../src/ui/tema';
 import { Cabecera, FilaGasto, Vacio } from '../../src/ui/componentes';
-import { listarGastos, type Gasto } from '../../src/db/gastos';
+import { listarGastos, CATEGORIAS, CATEGORIAS_INGRESO, type Gasto } from '../../src/db/gastos';
 
 const PAGINA = 40;
 
-interface Seccion {
-  titulo: string;
-  data: Gasto[];
-}
+type FiltroTipo = 'todos' | 'gasto' | 'ingreso';
+
+interface Seccion { titulo: string; data: Gasto[] }
 
 function etiquetaFecha(fechaMs: number): string {
   const hoy = new Date();
-  const fecha = new Date(fechaMs);
   const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime();
   const inicioAyer = inicioHoy - 86_400_000;
-  // Semana arranca el lunes. getDay() devuelve 0=dom…6=sáb.
-  // El domingo (0) se trata como día 7 para que quede al final de la semana
-  // que termina ese día, no al inicio de una nueva (lunes→domingo).
   const diaSemana = hoy.getDay() === 0 ? 6 : hoy.getDay() - 1;
   const inicioSemana = inicioHoy - diaSemana * 86_400_000;
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).getTime();
   const inicioMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1).getTime();
 
-  const t = fecha.getTime();
+  const t = fechaMs;
   if (t >= inicioHoy) return 'Hoy';
   if (t >= inicioAyer) return 'Ayer';
   if (t >= inicioSemana) return 'Esta semana';
   if (t >= inicioMes) return 'Este mes';
   if (t >= inicioMesAnterior) return 'El mes pasado';
-  return fecha.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+  return new Date(fechaMs).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
 }
 
-function agruparEnSecciones(gastos: Gasto[]): Seccion[] {
+function agrupar(gastos: Gasto[]): Seccion[] {
   const mapa = new Map<string, Gasto[]>();
   for (const g of gastos) {
     const clave = etiquetaFecha(g.fecha);
@@ -48,11 +43,19 @@ function agruparEnSecciones(gastos: Gasto[]): Seccion[] {
   return Array.from(mapa.entries()).map(([titulo, data]) => ({ titulo, data }));
 }
 
+const TODAS_CATS = ['Todas', ...CATEGORIAS, ...CATEGORIAS_INGRESO.filter(
+  (c) => !CATEGORIAS.includes(c as any)
+)];
+
 export default function Gastos() {
   const router = useRouter();
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [hayMas, setHayMas] = useState(true);
   const [cargando, setCargando] = useState(false);
+
+  const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>('todos');
+  const [filtroCat, setFiltroCat] = useState('Todas');
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
   const cargarPrimera = useCallback(async () => {
     const datos = await listarGastos(PAGINA, 0);
@@ -60,37 +63,81 @@ export default function Gastos() {
     setHayMas(datos.length === PAGINA);
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      cargarPrimera();
-    }, [cargarPrimera])
-  );
+  useFocusEffect(useCallback(() => { cargarPrimera(); }, [cargarPrimera]));
 
   const cargarMas = async () => {
     if (!hayMas || cargando) return;
     setCargando(true);
     const siguientes = await listarGastos(PAGINA, gastos.length);
-    setGastos((previos) => [...previos, ...siguientes]);
+    setGastos((prev) => [...prev, ...siguientes]);
     setHayMas(siguientes.length === PAGINA);
     setCargando(false);
   };
 
-  const secciones = agruparEnSecciones(gastos);
+  const filtrados = useMemo(() => {
+    return gastos.filter((g) => {
+      if (filtroTipo !== 'todos' && g.tipo !== filtroTipo) return false;
+      if (filtroCat !== 'Todas' && g.categoria !== filtroCat) return false;
+      return true;
+    });
+  }, [gastos, filtroTipo, filtroCat]);
+
+  const secciones = useMemo(() => agrupar(filtrados), [filtrados]);
+  const hayFiltros = filtroTipo !== 'todos' || filtroCat !== 'Todas';
 
   return (
     <SafeAreaView style={e.pantalla} edges={[]}>
       <Cabecera
         seccion="Movimientos"
-        accion={{ icono: 'add-circle-outline', alPresionar: () => router.push('/gasto/nuevo') }}
+        accion={{
+          icono: hayFiltros ? 'funnel' : 'funnel-outline',
+          alPresionar: () => setMostrarFiltros((v) => !v),
+        }}
       />
+
+      {mostrarFiltros && (
+        <View style={e.panelFiltros}>
+          {/* Tipo */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={e.chipsFila}>
+            {(['todos', 'gasto', 'ingreso'] as FiltroTipo[]).map((t) => (
+              <Pressable
+                key={t}
+                onPress={() => setFiltroTipo(t)}
+                style={[e.chip, filtroTipo === t && e.chipActivo]}
+              >
+                <Text style={[e.chipTexto, filtroTipo === t && e.chipTextoActivo]}>
+                  {t === 'todos' ? 'Todos' : t === 'gasto' ? 'Gastos' : 'Ingresos'}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {/* Categoría */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={e.chipsFila}>
+            {TODAS_CATS.map((c) => (
+              <Pressable
+                key={c}
+                onPress={() => setFiltroCat(c)}
+                style={[e.chip, filtroCat === c && e.chipActivo]}
+              >
+                <Text style={[e.chipTexto, filtroCat === c && e.chipTextoActivo]}>{c}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {hayFiltros && (
+            <Pressable onPress={() => { setFiltroTipo('todos'); setFiltroCat('Todas'); }} style={e.limpiarBtn}>
+              <Text style={e.limpiarTexto}>Limpiar filtros</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
       <SectionList
         sections={secciones}
         keyExtractor={(g) => String(g.id)}
         renderItem={({ item }) => (
-          <FilaGasto
-            gasto={item}
-            alPresionar={() => router.push(`/gasto/${item.id}`)}
-          />
+          <FilaGasto gasto={item} alPresionar={() => router.push(`/gasto/${item.id}`)} />
         )}
         renderSectionHeader={({ section }) => (
           <View style={e.encabezadoSeccion}>
@@ -102,12 +149,17 @@ export default function Gastos() {
         ListEmptyComponent={
           <Vacio
             icono="receipt-outline"
-            titulo="Todavía no hay movimientos"
-            detalle="Cuando llegue una notificación de tu banco aparecerá acá. También puedes anotar un movimiento a mano."
-            accion={{
-              texto: 'Anotar un movimiento',
-              alPresionar: () => router.push('/gasto/nuevo'),
-            }}
+            titulo={hayFiltros ? 'Sin resultados' : 'Todavía no hay movimientos'}
+            detalle={
+              hayFiltros
+                ? 'No hay movimientos con los filtros seleccionados.'
+                : 'Cuando llegue una notificación de tu banco aparecerá acá. También puedes anotar un movimiento a mano.'
+            }
+            accion={
+              hayFiltros
+                ? { texto: 'Limpiar filtros', alPresionar: () => { setFiltroTipo('todos'); setFiltroCat('Todas'); } }
+                : { texto: 'Anotar un movimiento', alPresionar: () => router.push('/gasto/nuevo') }
+            }
           />
         }
         ListFooterComponent={<View style={{ height: espacio.xl }} />}
@@ -119,6 +171,29 @@ export default function Gastos() {
 
 const e = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colores.fondo },
+
+  panelFiltros: {
+    backgroundColor: colores.superficie,
+    borderBottomWidth: 1,
+    borderBottomColor: colores.borde,
+    paddingVertical: espacio.sm,
+    gap: espacio.xs,
+  },
+  chipsFila: { paddingHorizontal: espacio.md, gap: 6 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: colores.superficieAlta,
+    borderWidth: 1,
+    borderColor: colores.borde,
+  },
+  chipActivo: { backgroundColor: colores.acento, borderColor: colores.acento },
+  chipTexto: { ...tipografia.menudo, color: colores.textoSuave },
+  chipTextoActivo: { color: colores.fondo, fontWeight: '600' },
+  limpiarBtn: { paddingHorizontal: espacio.md, paddingTop: 4 },
+  limpiarTexto: { ...tipografia.menudo, color: colores.acento },
+
   encabezadoSeccion: {
     paddingHorizontal: espacio.md,
     paddingTop: espacio.md,
