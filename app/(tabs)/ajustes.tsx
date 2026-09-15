@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colores, espacio, radio, tipografia, fechaLegible } from '../../src/ui/tema';
 import { Boton, Cabecera, Tarjeta } from '../../src/ui/componentes';
 import { usePermisoNotificaciones } from '../../src/notificaciones/permisos';
+import { usePermisoSMS } from '../../src/sms';
 import {
   listarDiagnostico,
   limpiarDiagnostico,
@@ -32,6 +33,7 @@ const COLOR_VEREDICTO: Record<string, string> = {
 
 export default function Ajustes() {
   const permiso = usePermisoNotificaciones();
+  const permisoSMS = usePermisoSMS();
   const [bitacora, setBitacora] = useState<EntradaDiagnostico[]>([]);
   const [sinSubir, setSinSubir] = useState(0);
 
@@ -75,6 +77,42 @@ export default function Ajustes() {
           </View>
           {!permiso.activo && (
             <Boton texto="Activar en ajustes de Android" alPresionar={permiso.solicitar} />
+          )}
+        </Tarjeta>
+
+        <Tarjeta style={e.bloque}>
+          <Text style={e.encabezado}>Lectura de SMS bancarios</Text>
+          <Text style={e.detalle}>
+            {permisoSMS.activo
+              ? 'Piggy Eye puede leer los mensajes de texto de tus bancos para capturar movimientos que no lleguen como notificación push.'
+              : 'Opcional. Algunos bancos envían alertas de pago por mensaje de texto. Activa este permiso para que Piggy Eye también los detecte.'}
+          </Text>
+          <View style={e.estadoFila}>
+            <View
+              style={[
+                e.punto,
+                {
+                  backgroundColor:
+                    permisoSMS.activo ? colores.ingreso : colores.textoTenue,
+                },
+              ]}
+            />
+            <Text style={e.estadoTexto}>
+              {permisoSMS.activo
+                ? 'Activo'
+                : permisoSMS.estado === 'never_ask_again'
+                ? 'Bloqueado — abre Ajustes de Android'
+                : 'Apagado'}
+            </Text>
+          </View>
+          {!permisoSMS.activo && permisoSMS.estado !== 'never_ask_again' && (
+            <Boton
+              texto="Activar lectura de SMS"
+              variante="secundario"
+              alPresionar={async () => {
+                await permisoSMS.solicitar();
+              }}
+            />
           )}
         </Tarjeta>
 

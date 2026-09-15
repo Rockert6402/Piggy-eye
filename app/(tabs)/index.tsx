@@ -28,6 +28,7 @@ import {
 } from '../../src/db/gastos';
 import { contarPendientes } from '../../src/db/pendientes';
 import { usePermisoNotificaciones } from '../../src/notificaciones/permisos';
+import { consultarPermisoSMS, leerSMSBancarios } from '../../src/sms';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -40,6 +41,12 @@ export default function Dashboard() {
   const [refrescando, setRefrescando] = useState(false);
 
   const cargar = useCallback(async () => {
+    // Procesar SMS bancarios si hay permiso, antes de leer el resumen
+    const permisoSMS = await consultarPermisoSMS();
+    if (permisoSMS === 'authorized') {
+      await leerSMSBancarios(30);
+    }
+
     const inicioMes = new Date();
     inicioMes.setDate(1);
     inicioMes.setHours(0, 0, 0, 0);
