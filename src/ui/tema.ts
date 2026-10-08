@@ -10,6 +10,11 @@
  * en una paleta fría, así que el ojo va directo a donde está el dinero.
  */
 
+import type { TextStyle } from 'react-native';
+
+/** Mutable a propósito: TextStyle no acepta arreglos readonly. */
+const cifrasTabulares: TextStyle['fontVariant'] = ['tabular-nums'];
+
 export const colores = {
   fondo: '#0E1B1F',
   superficie: '#16272C',
@@ -52,12 +57,12 @@ export const tipografia = {
     fontSize: 40,
     fontWeight: '600' as const,
     letterSpacing: -1,
-    fontVariant: ['tabular-nums' as const],
+    fontVariant: cifrasTabulares,
   },
   cifra: {
     fontSize: 17,
     fontWeight: '600' as const,
-    fontVariant: ['tabular-nums' as const],
+    fontVariant: cifrasTabulares,
   },
   titulo: { fontSize: 22, fontWeight: '600' as const, letterSpacing: -0.3 },
   cuerpo: { fontSize: 15, fontWeight: '400' as const },

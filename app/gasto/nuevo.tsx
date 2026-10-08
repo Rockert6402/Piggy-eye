@@ -1,4 +1,10 @@
-/** Registro manual de gastos e ingresos — efectivo y virtual. */
+/**
+ * HU-03: registro manual de gastos e ingresos — efectivo y virtual.
+ *
+ * Criterios cubiertos: monto, fecha, categoría opcional y descripción;
+ * mismo formato que un gasto automático (crearGasto); validación de monto;
+ * error de base de datos sin perder lo escrito; toast de confirmación.
+ */
 
 import React, { useState } from 'react';
 import {
@@ -18,6 +24,30 @@ import { colores, espacio, radio, tipografia } from '../../src/ui/tema';
 import { Boton } from '../../src/ui/componentes';
 import { formatearCOP, normalizarMonto } from '../../src/parser/monto';
 import { crearGasto, CATEGORIAS, CATEGORIAS_INGRESO } from '../../src/db/gastos';
+import { avisarCambioDatos } from '../../src/eventos';
+import { mostrarToast } from '../../src/ui/toast';
+
+const DIA_MS = 86_400_000;
+const MENSAJE_MONTO_INVALIDO = 'Por favor, ingresa un monto válido';
+
+/** Inicio del día local de `ms`, para comparar fechas sin la hora. */
+function inicioDia(ms: number): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function etiquetaDia(ms: number): string {
+  const hoy = inicioDia(Date.now());
+  const dia = inicioDia(ms);
+  if (dia === hoy) return 'Hoy';
+  if (dia === hoy - DIA_MS) return 'Ayer';
+  return new Date(ms).toLocaleDateString('es-CO', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}
 
 type Tipo = 'gasto' | 'ingreso';
 type Origen = 'efectivo' | 'virtual';
@@ -33,6 +63,9 @@ export default function NuevoMovimiento() {
   const [categoria, setCategoria] = useState<string>('Sin categoría');
   const [nota, setNota] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [errorMonto, setErrorMonto] = useState<string | null>(null);
+  // Cuántos días atrás: 0 = hoy. No se permiten fechas futuras.
+  const [diasAtras, setDiasAtras] = useState(0);
 
   const valor = normalizarMonto(monto);
   const esIngreso = tipo === 'ingreso';
@@ -45,21 +78,36 @@ export default function NuevoMovimiento() {
     setCategoria('Sin categoría');
   };
 
+  // Conserva la hora actual y solo mueve el día: así un gasto de "ayer"
+  // queda ordenado de forma natural junto a los de ese día.
+  const fecha = Date.now() - diasAtras * DIA_MS;
+
   const guardar = async () => {
+    // normalizarMonto devuelve null para vacío, texto, 0 y negativos.
     if (valor === null) {
-      Alert.alert('Falta el monto', esIngreso ? '¿Cuánto recibiste?' : '¿Cuánto gastaste?');
+      setErrorMonto(MENSAJE_MONTO_INVALIDO);
       return;
     }
     setGuardando(true);
-    await crearGasto({
-      monto: valor,
-      tipo,
-      comercio: comercio.trim() || null,
-      banco: origen === 'virtual' ? (banco.trim() || null) : null,
-      categoria,
-      nota: nota.trim() || null,
-      origen: 'manual',
-    });
+    try {
+      await crearGasto({
+        monto: valor,
+        tipo,
+        comercio: comercio.trim() || null,
+        banco: origen === 'virtual' ? (banco.trim() || null) : null,
+        categoria,
+        nota: nota.trim() || null,
+        origen: 'manual',
+        fecha,
+      });
+    } catch {
+      // Los campos son estado de React: si no navegamos, siguen intactos.
+      setGuardando(false);
+      Alert.alert('Error', 'No se pudo guardar el gasto. Intenta de nuevo');
+      return;
+    }
+    avisarCambioDatos();
+    mostrarToast(esIngreso ? 'Ingreso guardado correctamente' : 'Gasto guardado correctamente');
     router.back();
   };
 
@@ -141,7 +189,10 @@ export default function NuevoMovimiento() {
           <Text style={[e.signo, { color: colorActivo }]}>{esIngreso ? '+' : '−'}</Text>
           <TextInput
             value={monto}
-            onChangeText={setMonto}
+            onChangeText={(t) => {
+              setMonto(t);
+              if (errorMonto) setErrorMonto(null);
+            }}
             keyboardType="numeric"
             placeholder="0"
             placeholderTextColor={colores.textoTenue}
@@ -152,6 +203,30 @@ export default function NuevoMovimiento() {
         {valor !== null && (
           <Text style={e.previsualizacion}>{formatearCOP(valor)}</Text>
         )}
+        {errorMonto && <Text style={e.error}>{errorMonto}</Text>}
+
+        {/* Fecha */}
+        <View style={{ gap: 6 }}>
+          <Text style={e.etiqueta}>Fecha</Text>
+          <View style={e.fechaFila}>
+            <Pressable
+              onPress={() => setDiasAtras((d) => d + 1)}
+              style={e.fechaBoton}
+              accessibilityLabel="Día anterior"
+            >
+              <Ionicons name="chevron-back" size={18} color={colores.textoSuave} />
+            </Pressable>
+            <Text style={e.fechaTexto}>{etiquetaDia(fecha)}</Text>
+            <Pressable
+              onPress={() => setDiasAtras((d) => Math.max(0, d - 1))}
+              disabled={diasAtras === 0}
+              style={[e.fechaBoton, diasAtras === 0 && { opacity: 0.3 }]}
+              accessibilityLabel="Día siguiente"
+            >
+              <Ionicons name="chevron-forward" size={18} color={colores.textoSuave} />
+            </Pressable>
+          </View>
+        </View>
 
         {/* Banco / fuente (solo en virtual) */}
         {origen === 'virtual' && (
@@ -216,7 +291,7 @@ export default function NuevoMovimiento() {
         <Boton
           texto={esIngreso ? 'Registrar ingreso' : 'Guardar gasto'}
           alPresionar={guardar}
-          deshabilitado={valor === null || guardando}
+          deshabilitado={guardando}
         />
       </ScrollView>
     </SafeAreaView>
@@ -278,6 +353,24 @@ const e = StyleSheet.create({
     textAlign: 'center',
     minWidth: 140,
   },
+  error: {
+    ...tipografia.menudo,
+    color: colores.peligro,
+    textAlign: 'center',
+    marginTop: -espacio.sm,
+  },
+  fechaFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colores.superficie,
+    borderWidth: 1,
+    borderColor: colores.borde,
+    borderRadius: radio.sm,
+    paddingHorizontal: espacio.xs,
+  },
+  fechaBoton: { padding: 10 },
+  fechaTexto: { ...tipografia.cuerpo, color: colores.texto, textTransform: 'capitalize' },
   previsualizacion: {
     ...tipografia.menudo,
     color: colores.textoTenue,

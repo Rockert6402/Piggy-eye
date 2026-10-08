@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { colores, tipografia } from '../../src/ui/tema';
 import { contarPendientes } from '../../src/db/pendientes';
+import { useAlCambiarDatos } from '../../src/eventos';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -19,11 +20,13 @@ export default function Pestanas() {
   const [pendientes, setPendientes] = useState(0);
   const insets = useSafeAreaInsets();
 
-  useFocusEffect(
-    useCallback(() => {
-      contarPendientes().then(setPendientes);
-    }, [])
-  );
+  const contar = useCallback(() => {
+    contarPendientes().then(setPendientes).catch(() => undefined);
+  }, []);
+
+  useFocusEffect(contar);
+  // El contador del badge sigue a los pendientes nuevos y a los resueltos.
+  useAlCambiarDatos(contar);
 
   return (
     <Tabs

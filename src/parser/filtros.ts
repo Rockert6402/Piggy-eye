@@ -22,7 +22,7 @@ const RUIDO = [
   'descuento',
   'aprovecha',
   'felicitaciones',
-  'gana ',
+  'gana',
   'sorteo',
   'premio',
   'actualiza tu app',
@@ -78,6 +78,48 @@ const OPERACION = [
   'sent',
 ];
 
+/**
+ * Letras y dígitos que cuentan como "parte de una palabra" en español.
+ * Se escribe a mano en vez de usar \p{L} para no depender del soporte de
+ * propiedades Unicode del motor de JavaScript (Hermes).
+ */
+const LETRA = 'a-z0-9áéíóúüñ';
+
+/**
+ * Términos que deben coincidir como palabra completa. El resto coincide
+ * como inicio de palabra: "compra" acepta "compras", "pago" acepta "pagos",
+ * pero ninguno acepta quedar en mitad de otra palabra.
+ *
+ * Sin esto, "sent" coincidía dentro de "presente" o "sentimos", "cargo"
+ * dentro de "encargo" y "gana" dentro de "ganancia".
+ */
+const PALABRA_COMPLETA = new Set(['sent', 'charged', 'gana', 'token', 'pago', 'cargo']);
+
+function escapar(termino: string): string {
+  return termino.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Compila cada término a una regex una sola vez, al cargar el módulo. */
+function compilar(terminos: string[]): Array<{ termino: string; regex: RegExp }> {
+  return terminos.map((termino) => {
+    const fin = PALABRA_COMPLETA.has(termino) ? `(?![${LETRA}])` : '';
+    return {
+      termino,
+      regex: new RegExp(`(?:^|[^${LETRA}])${escapar(termino)}${fin}`),
+    };
+  });
+}
+
+const RUIDO_RX = compilar(RUIDO);
+const OPERACION_RX = compilar(OPERACION);
+
+function buscar(
+  contenido: string,
+  lista: Array<{ termino: string; regex: RegExp }>
+): string | undefined {
+  return lista.find(({ regex }) => regex.test(contenido))?.termino;
+}
+
 export interface ResultadoFiltro {
   aceptada: boolean;
   /** Presente solo si `aceptada` es true. */
@@ -108,12 +150,12 @@ export function filtrar(
     return { aceptada: false, motivo: 'sin-texto' };
   }
 
-  const ruido = RUIDO.find((termino) => contenido.includes(termino));
+  const ruido = buscar(contenido, RUIDO_RX);
   if (ruido) {
     return { aceptada: false, motivo: 'ruido', coincidencia: ruido };
   }
 
-  const operacion = OPERACION.find((termino) => contenido.includes(termino));
+  const operacion = buscar(contenido, OPERACION_RX);
   if (!operacion) {
     return { aceptada: false, motivo: 'sin-operacion' };
   }

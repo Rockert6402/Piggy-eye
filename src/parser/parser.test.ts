@@ -12,6 +12,8 @@
 
 import { parsearNotificacion, type NotificacionCruda } from './index';
 import { normalizarMonto } from './monto';
+import { filtrar } from './filtros';
+import { textoGastoRegistrado, textoPagoSinProcesar } from '../notificaciones/avisos';
 
 const notificacion = (
   app: string,
@@ -31,6 +33,7 @@ describe('normalizarMonto', () => {
     ['', null],
     ['abc', null],
     ['0', null],
+    ['-5000', null],
   ];
 
   test.each(casos)('normaliza %s', (entrada, esperado) => {
@@ -76,6 +79,60 @@ describe('filtrado de falsos positivos (HU-02)', () => {
     );
     expect(r.estado).toBe('descartada');
     if (r.estado === 'descartada') expect(r.motivo).toBe('sin-operacion');
+  });
+
+  it('no confunde palabras clave dentro de otras palabras', () => {
+    // "sent" vive dentro de "presente" y "cargo" dentro de "encargo":
+    // con búsqueda por subcadena esto pasaba como transacción.
+    const r = parsearNotificacion(
+      notificacion(
+        'com.paypal.android.p2pmobile',
+        'PayPal',
+        'Te presentamos el nuevo encargo de tu cuenta'
+      )
+    );
+    expect(r.estado).toBe('descartada');
+    if (r.estado === 'descartada') expect(r.motivo).toBe('sin-operacion');
+  });
+
+  it('acepta variantes de una palabra clave al inicio de palabra', () => {
+    expect(filtrar('com.todo1.mobile', 'Bancolombia', 'Tus compras de hoy: $10.000').aceptada).toBe(true);
+  });
+
+  it('no descarta por ruido cuando el término está dentro de otra palabra', () => {
+    // "gana" dentro de "ganancia" no es publicidad.
+    const r = filtrar('com.nequi.MobileApp', 'Nequi', 'Recibiste $50.000 de tu ganancia');
+    expect(r.aceptada).toBe(true);
+  });
+
+  it('las descartadas no producen gasto ni pendiente', () => {
+    const textos = [
+      ['com.whatsapp', 'Juan', 'Te pagué $20.000'],
+      ['com.nequi.MobileApp', 'Nequi', 'Participa en el sorteo y gana $1.000.000'],
+      ['com.todo1.mobile', 'Bancolombia', 'Tu código de verificación es 123456'],
+      ['com.todo1.mobile', 'Bancolombia', ''],
+    ] as const;
+    for (const [app, titulo, texto] of textos) {
+      expect(parsearNotificacion(notificacion(app, titulo, texto)).estado).toBe('descartada');
+    }
+  });
+});
+
+describe('avisos al usuario (HU-01)', () => {
+  it('arma el texto de confirmación con monto en pesos y comercio', () => {
+    const t = textoGastoRegistrado({ monto: 25000, comercio: 'Éxito', banco: 'Bancolombia', tipo: 'gasto' });
+    expect(t).toMatch(/^Se registró un gasto de \$\s?25\.000 en Éxito$/);
+  });
+
+  it('usa el banco cuando no hay comercio', () => {
+    const t = textoGastoRegistrado({ monto: 8000, comercio: null, banco: 'Nequi', tipo: 'gasto' });
+    expect(t).toMatch(/con Nequi$/);
+  });
+
+  it('arma el texto de fallo con el nombre del banco', () => {
+    expect(textoPagoSinProcesar('Bancolombia')).toBe(
+      'Detectamos un pago en Bancolombia. Toca aquí para registrarlo manualmente.'
+    );
   });
 });
 

@@ -91,10 +91,15 @@ export async function leerSMSBancarios(diasAtras = 30): Promise<number> {
 
   let SmsAndroid: any;
   try {
-    SmsAndroid = require('react-native-get-sms-android').default;
+    // La librería hace `module.exports = NativeModules.Sms`: no tiene
+    // `default`. Se acepta ambas formas por si una versión futura cambia.
+    const mod = require('react-native-get-sms-android');
+    SmsAndroid = mod?.default ?? mod;
   } catch {
     return 0;
   }
+  // Sin módulo nativo (app compilada sin la librería) no hay nada que leer.
+  if (typeof SmsAndroid?.list !== 'function') return 0;
 
   const desde = Date.now() - diasAtras * 86_400_000;
 
@@ -140,7 +145,7 @@ export async function leerSMSBancarios(diasAtras = 30): Promise<number> {
         const coincidencia = texto.match(regla.patron);
         if (!coincidencia?.groups) continue;
 
-        const monto = normalizarMonto(coincidencia.groups.monto);
+        const monto = normalizarMonto(coincidencia.groups.monto ?? '');
         if (monto === null) {
           await crearPendiente({
             montoSugerido: null,

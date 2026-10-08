@@ -28,6 +28,7 @@ import {
 } from '../../src/db/gastos';
 import { presupuestosConGasto, type PresupuestoConGasto } from '../../src/db/presupuestos';
 import { contarPendientes } from '../../src/db/pendientes';
+import { useAlCambiarDatos } from '../../src/eventos';
 import { usePermisoNotificaciones } from '../../src/notificaciones/permisos';
 import { consultarPermisoSMS, leerSMSBancarios } from '../../src/sms';
 
@@ -44,7 +45,8 @@ export default function Dashboard() {
 
   const cargar = useCallback(async () => {
     const permisoSMS = await consultarPermisoSMS();
-    if (permisoSMS === 'authorized') await leerSMSBancarios(30);
+    // Si la lectura de SMS falla, el resumen igual debe cargar.
+    if (permisoSMS === 'authorized') await leerSMSBancarios(30).catch(() => 0);
 
     const inicioMes = new Date();
     inicioMes.setDate(1);
@@ -66,6 +68,7 @@ export default function Dashboard() {
   }, []);
 
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
+  useAlCambiarDatos(cargar);
 
   const refrescar = async () => {
     setRefrescando(true);

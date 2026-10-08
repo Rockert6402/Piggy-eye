@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colores, espacio, tipografia } from '../../src/ui/tema';
 import { Cabecera, FilaGasto, Vacio } from '../../src/ui/componentes';
 import { listarGastos, CATEGORIAS, CATEGORIAS_INGRESO, type Gasto } from '../../src/db/gastos';
+import { contarPendientes } from '../../src/db/pendientes';
+import { useAlCambiarDatos } from '../../src/eventos';
 
 const PAGINA = 40;
 
@@ -52,18 +54,22 @@ export default function Gastos() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [hayMas, setHayMas] = useState(true);
   const [cargando, setCargando] = useState(false);
+  const [pendientes, setPendientes] = useState(0);
 
   const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>('todos');
   const [filtroCat, setFiltroCat] = useState('Todas');
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
   const cargarPrimera = useCallback(async () => {
-    const datos = await listarGastos(PAGINA, 0);
+    const [datos, n] = await Promise.all([listarGastos(PAGINA, 0), contarPendientes()]);
     setGastos(datos);
     setHayMas(datos.length === PAGINA);
+    setPendientes(n);
   }, []);
 
   useFocusEffect(useCallback(() => { cargarPrimera(); }, [cargarPrimera]));
+  // HU-01: un gasto que entra con la lista abierta aparece sin tocar nada.
+  useAlCambiarDatos(cargarPrimera);
 
   const cargarMas = async () => {
     if (!hayMas || cargando) return;
@@ -133,6 +139,18 @@ export default function Gastos() {
         </View>
       )}
 
+      {/* HU-04: lo que quedó por completar se ve desde la lista principal. */}
+      {pendientes > 0 && (
+        <Pressable onPress={() => router.push('/pendientes')} style={e.avisoPendientes}>
+          <Text style={e.avisoPendientesTexto}>
+            {pendientes === 1
+              ? '1 movimiento por completar'
+              : `${pendientes} movimientos por completar`}
+          </Text>
+          <Text style={e.avisoPendientesAccion}>Completar</Text>
+        </Pressable>
+      )}
+
       <SectionList
         sections={secciones}
         keyExtractor={(g) => String(g.id)}
@@ -171,6 +189,22 @@ export default function Gastos() {
 
 const e = StyleSheet.create({
   pantalla: { flex: 1, backgroundColor: colores.fondo },
+
+  avisoPendientes: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: espacio.md,
+    marginTop: espacio.sm,
+    paddingHorizontal: espacio.md,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colores.atencion,
+    backgroundColor: colores.superficie,
+  },
+  avisoPendientesTexto: { ...tipografia.menudo, color: colores.atencion },
+  avisoPendientesAccion: { ...tipografia.etiqueta, color: colores.atencion },
 
   panelFiltros: {
     backgroundColor: colores.superficie,

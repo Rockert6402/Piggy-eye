@@ -16,6 +16,8 @@ import { parsearNotificacion, type NotificacionCruda } from '../parser';
 import { crearGasto } from '../db/gastos';
 import { crearPendiente, registrarDiagnostico } from '../db/pendientes';
 import { encolarSincronizacion } from '../sync/cola';
+import { avisarCambioDatos } from '../eventos';
+import { avisarGastoRegistrado, avisarPagoSinProcesar } from './avisos';
 
 /**
  * El módulo nativo entrega la notificación como un string JSON dentro de
@@ -71,6 +73,10 @@ export async function manejarNotificacion({
         veredicto: 'pendiente',
         motivo: resultado.razon,
       });
+      avisarCambioDatos();
+      // HU-01, manejo de errores: el banco es conocido pero no se pudo
+      // leer el monto. Se avisa para que el usuario lo complete (HU-04).
+      await avisarPagoSinProcesar(resultado.banco);
       return;
     }
 
@@ -95,6 +101,16 @@ export async function manejarNotificacion({
 
     // El gasto ya está a salvo en disco. La subida es mejor-esfuerzo.
     if (id !== null) {
+      avisarCambioDatos();
+      // HU-01, confirmación: solo para gastos nuevos. Un duplicado
+      // (Android reenviando la misma notificación) no vuelve a avisar.
+      await avisarGastoRegistrado({
+        id,
+        monto: resultado.monto,
+        comercio: resultado.comercio,
+        banco: resultado.banco,
+        tipo: resultado.tipo,
+      });
       await encolarSincronizacion(id);
     }
   } catch (error) {

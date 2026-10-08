@@ -8,6 +8,7 @@
 
 import React, { useCallback, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -29,19 +30,29 @@ import {
   type Pendiente,
 } from '../../src/db/pendientes';
 import { CATEGORIAS } from '../../src/db/gastos';
+import { avisarCambioDatos, useAlCambiarDatos } from '../../src/eventos';
+import { mostrarToast } from '../../src/ui/toast';
+
+const MENSAJE_MONTO_INVALIDO = 'Ingresa un valor numérico mayor a 0';
 
 export default function Pendientes() {
   const [items, setItems] = useState<Pendiente[]>([]);
   const [montos, setMontos] = useState<Record<number, string>>({});
   const [comercios, setComercios] = useState<Record<number, string>>({});
   const [categorias, setCategorias] = useState<Record<number, string>>({});
+  const [errores, setErrores] = useState<Record<number, string>>({});
 
   const cargar = useCallback(async () => {
     const datos = await listarPendientes();
     setItems(datos);
-    setMontos(
+    // Conserva lo que el usuario ya escribió: esta función también corre
+    // cuando llega un pendiente nuevo con la pantalla abierta.
+    setMontos((prev) =>
       Object.fromEntries(
-        datos.map((p) => [p.id, p.monto_sugerido ? String(p.monto_sugerido) : ''])
+        datos.map((p) => [
+          p.id,
+          prev[p.id] ?? (p.monto_sugerido ? String(p.monto_sugerido) : ''),
+        ])
       )
     );
     // Inicializar categoría solo para items nuevos, preservando selección actual.
@@ -55,21 +66,31 @@ export default function Pendientes() {
       cargar();
     }, [cargar])
   );
+  useAlCambiarDatos(cargar);
 
   const confirmar = async (p: Pendiente) => {
     const monto = normalizarMonto(montos[p.id] ?? '');
-    if (monto === null) return;
-    await confirmarPendiente(p.id, {
-      monto,
-      comercio: comercios[p.id]?.trim() || null,
-      categoria: categorias[p.id] ?? 'Sin categoría',
-    });
-    await cargar();
+    if (monto === null) {
+      setErrores((prev) => ({ ...prev, [p.id]: MENSAJE_MONTO_INVALIDO }));
+      return;
+    }
+    try {
+      await confirmarPendiente(p.id, {
+        monto,
+        comercio: comercios[p.id]?.trim() || null,
+        categoria: categorias[p.id] ?? 'Sin categoría',
+      });
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar el gasto. Intenta de nuevo');
+      return;
+    }
+    mostrarToast('Gasto completado y actualizado en la lista');
+    avisarCambioDatos(); // recarga esta lista, el badge y el resto
   };
 
   const descartar = async (p: Pendiente) => {
     await descartarPendiente(p.id);
-    await cargar();
+    avisarCambioDatos();
   };
 
   return (
@@ -103,9 +124,10 @@ export default function Pendientes() {
                   <Text style={e.etiqueta}>Monto</Text>
                   <TextInput
                     value={montos[item.id] ?? ''}
-                    onChangeText={(v) =>
-                      setMontos((prev) => ({ ...prev, [item.id]: v }))
-                    }
+                    onChangeText={(v) => {
+                      setMontos((prev) => ({ ...prev, [item.id]: v }));
+                      setErrores((prev) => ({ ...prev, [item.id]: '' }));
+                    }}
                     keyboardType="numeric"
                     placeholder="0"
                     placeholderTextColor={colores.textoTenue}
@@ -154,19 +176,20 @@ export default function Pendientes() {
                 </ScrollView>
               </View>
 
-              {montoValido && (
+              {errores[item.id] ? (
+                <Text style={e.error}>{errores[item.id]}</Text>
+              ) : montoValido ? (
                 <Text style={e.previsualizacion}>
-                  Se registrará {formatearCOP(normalizarMonto(montos[item.id])!)} en{' '}
+                  Se registrará {formatearCOP(normalizarMonto(montos[item.id] ?? '')!)} en{' '}
                   {categoriaActual}
                 </Text>
-              )}
+              ) : null}
 
               <View style={e.acciones}>
                 <View style={{ flex: 1 }}>
                   <Boton
                     texto="Registrar"
                     alPresionar={() => confirmar(item)}
-                    deshabilitado={!montoValido}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -210,6 +233,7 @@ const e = StyleSheet.create({
     paddingVertical: 10,
   },
   previsualizacion: { ...tipografia.menudo, color: colores.acento },
+  error: { ...tipografia.menudo, color: colores.peligro },
   acciones: { flexDirection: 'row', gap: espacio.sm, marginTop: espacio.xs },
 
   chips: { flexDirection: 'row', gap: 6, paddingBottom: 2 },

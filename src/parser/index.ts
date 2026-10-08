@@ -110,7 +110,7 @@ export function parsearNotificacion(n: NotificacionCruda): ResultadoParser {
     const coincidencia = contenido.match(regla.patron);
     if (!coincidencia?.groups) continue;
 
-    const monto = normalizarMonto(coincidencia.groups.monto);
+    const monto = normalizarMonto(coincidencia.groups.monto ?? '');
     if (monto === null) {
       // La regla acertó pero el monto no se pudo leer: no adivinamos.
       return {
