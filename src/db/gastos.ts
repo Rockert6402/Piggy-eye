@@ -135,6 +135,22 @@ export async function listarGastosEntre(desde: number, hasta: number): Promise<G
   );
 }
 
+/**
+ * HU-05: solo las columnas que usa el resumen del dashboard, en un rango.
+ * Una sola consulta alimenta las vistas de día, semana y mes.
+ */
+export async function listarParaResumen(
+  desde: number,
+  hasta: number
+): Promise<{ fecha: number; monto: number; tipo: Tipo; categoria: string }[]> {
+  const bd = await abrirBD();
+  return bd.getAllAsync(
+    'SELECT fecha, monto, tipo, categoria FROM gastos WHERE fecha >= ? AND fecha < ?',
+    desde,
+    hasta
+  );
+}
+
 /** HU-08: editar. Solo toca los campos que vengan definidos. */
 export async function editarGasto(
   id: number,

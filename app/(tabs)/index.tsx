@@ -1,10 +1,19 @@
 /**
- * HU-05: dashboard con resumen por día, semana y mes.
+ * HU-05: dashboard con resumen de gastos por día, semana y mes.
  * También es donde aparece la alerta de permiso revocado (HU-07).
+ *
+ * Criterios cubiertos:
+ *   - Suma gastos automáticos, manuales y confirmados (src/dashboard/resumen).
+ *   - Selector Día / Semana / Mes. Las tres vistas se calculan de una vez,
+ *     así que cambiar de pestaña es inmediato y no consulta la base.
+ *   - Se recalcula solo cuando entra un gasto (useAlCambiarDatos).
+ *   - Estado vacío: "No hay gastos registrados para este periodo".
+ *   - Si falla el cálculo: mensaje y botón para reintentar.
  */
 
 import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,60 +23,82 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { colores, espacio, radio, tipografia } from '../../src/ui/tema';
-import { Cabecera, Tarjeta, Boton } from '../../src/ui/componentes';
+import { Cabecera, Tarjeta, Boton, Vacio } from '../../src/ui/componentes';
 import { formatearCOP } from '../../src/parser/monto';
+import { listarParaResumen } from '../../src/db/gastos';
 import {
-  resumenDashboard,
-  totalesPorCategoria,
-  serieDiariaDoble,
-  type CorteTemporal,
-  type GastoPorCategoria,
-  type PuntoDiarioDoble,
-} from '../../src/db/gastos';
+  rangoConsulta,
+  resumirTodo,
+  VISTAS,
+  type ResumenVista,
+  type Vista,
+} from '../../src/dashboard/resumen';
 import { presupuestosConGasto, type PresupuestoConGasto } from '../../src/db/presupuestos';
 import { contarPendientes } from '../../src/db/pendientes';
 import { useAlCambiarDatos } from '../../src/eventos';
 import { usePermisoNotificaciones } from '../../src/notificaciones/permisos';
 import { consultarPermisoSMS, leerSMSBancarios } from '../../src/sms';
 
+const ALTO_GRAFICA = 80;
+
+type Estado =
+  | { tipo: 'cargando' }
+  | { tipo: 'error' }
+  | { tipo: 'listo'; resumenes: Record<Vista, ResumenVista> };
+
+/** "+25 % vs. ayer", "−10 % vs. la semana pasada" o null si no hay con qué comparar. */
+function textoVariacion(r: ResumenVista): { texto: string; subio: boolean } | null {
+  if (r.variacion === null) return null;
+  const pct = Math.round(Math.abs(r.variacion) * 100);
+  if (pct === 0) return { texto: `Igual que ${r.rango.textoAnterior}`, subio: false };
+  const subio = r.variacion > 0;
+  return { texto: `${subio ? '+' : '−'}${pct} % vs. ${r.rango.textoAnterior}`, subio };
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const permiso = usePermisoNotificaciones();
 
-  const [corte, setCorte] = useState<CorteTemporal | null>(null);
-  const [categorias, setCategorias] = useState<GastoPorCategoria[]>([]);
-  const [serie, setSerie] = useState<PuntoDiarioDoble[]>([]);
+  const [vista, setVista] = useState<Vista>('dia');
+  const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
   const [presupuestos, setPresupuestos] = useState<PresupuestoConGasto[]>([]);
   const [pendientes, setPendientes] = useState(0);
   const [refrescando, setRefrescando] = useState(false);
 
   const cargar = useCallback(async () => {
-    const permisoSMS = await consultarPermisoSMS();
     // Si la lectura de SMS falla, el resumen igual debe cargar.
-    if (permisoSMS === 'authorized') await leerSMSBancarios(30).catch(() => 0);
+    try {
+      const permisoSMS = await consultarPermisoSMS();
+      if (permisoSMS === 'authorized') await leerSMSBancarios(30);
+    } catch {
+      // Se ignora: los SMS son un complemento.
+    }
 
-    const inicioMes = new Date();
-    inicioMes.setDate(1);
-    inicioMes.setHours(0, 0, 0, 0);
-    const fin = Date.now() + 1;
+    try {
+      const ahora = new Date();
+      const { desde, hasta } = rangoConsulta(ahora);
+      const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).getTime();
 
-    const [r, c, s, p, pr] = await Promise.all([
-      resumenDashboard(),
-      totalesPorCategoria(inicioMes.getTime(), fin),
-      serieDiariaDoble(14),
-      contarPendientes(),
-      presupuestosConGasto(inicioMes.getTime(), fin),
-    ]);
-    setCorte(r);
-    setCategorias(c);
-    setSerie(s);
-    setPendientes(p);
-    setPresupuestos(pr);
+      const [movimientos, p, pr] = await Promise.all([
+        listarParaResumen(desde, hasta),
+        contarPendientes(),
+        presupuestosConGasto(inicioMes, ahora.getTime() + 1),
+      ]);
+
+      // Las tres vistas de una vez: cambiar de pestaña no vuelve a la base.
+      setEstado({ tipo: 'listo', resumenes: resumirTodo(movimientos, ahora) });
+      setPendientes(p);
+      setPresupuestos(pr);
+    } catch {
+      setEstado({ tipo: 'error' });
+    }
   }, []);
 
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
+  // HU-05: los totales cambian solos cuando entra un gasto nuevo.
   useAlCambiarDatos(cargar);
 
   const refrescar = async () => {
@@ -76,7 +107,13 @@ export default function Dashboard() {
     setRefrescando(false);
   };
 
-  const maxValor = Math.max(...serie.flatMap((p) => [p.gastos, p.ingresos]), 1);
+  const reintentar = () => {
+    setEstado({ tipo: 'cargando' });
+    void cargar();
+  };
+
+  const r = estado.tipo === 'listo' ? estado.resumenes[vista] : null;
+  const variacion = r ? textoVariacion(r) : null;
 
   return (
     <SafeAreaView style={e.pantalla} edges={[]}>
@@ -113,89 +150,150 @@ export default function Dashboard() {
           </Pressable>
         )}
 
-        {/* Balance del mes */}
-        <View style={e.encabezado}>
-          <Text style={e.etiquetaPrincipal}>Balance este mes</Text>
-          {(() => {
-            const gastosMes = corte?.mes.total ?? 0;
-            const ingresosMes = corte?.ingresosMes.total ?? 0;
-            const balance = ingresosMes - gastosMes;
-            const colorBalance = balance >= 0 ? colores.ingreso : colores.atencion;
+        {/* Selector Día / Semana / Mes */}
+        <View style={e.selector} accessibilityRole="tablist">
+          {VISTAS.map((v) => {
+            const activa = vista === v.id;
             return (
-              <>
-                <Text style={[e.cifraPrincipal, { color: colorBalance }]}>
-                  {balance >= 0 ? '+' : ''}{formatearCOP(balance)}
-                </Text>
-                <View style={e.desgloseMes}>
-                  <Text style={e.desgloseMesTexto}>
-                    <Text style={{ color: colores.ingreso }}>↓ {formatearCOP(ingresosMes)}</Text>
-                    {'  '}
-                    <Text style={{ color: colores.acento }}>↑ {formatearCOP(gastosMes)}</Text>
-                  </Text>
-                </View>
-              </>
+              <Pressable
+                key={v.id}
+                onPress={() => setVista(v.id)}
+                style={[e.segmento, activa && e.segmentoActivo]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: activa }}
+              >
+                <Text style={[e.segmentoTexto, activa && e.segmentoTextoActivo]}>{v.etiqueta}</Text>
+              </Pressable>
             );
-          })()}
-          <Text style={e.subCifra}>
-            {(corte?.mes.cantidad ?? 0) + (corte?.ingresosMes.cantidad ?? 0)} movimientos este mes
-          </Text>
+          })}
         </View>
 
-        {/* Tarjetas hoy / semana */}
-        <View style={e.duo}>
-          <Tarjeta style={e.mitad}>
-            <Text style={e.etiqueta}>Hoy</Text>
-            <Text style={e.cifraMedia}>{formatearCOP(corte?.hoy.total ?? 0)}</Text>
-          </Tarjeta>
-          <Tarjeta style={e.mitad}>
-            <Text style={e.etiqueta}>Esta semana</Text>
-            <Text style={e.cifraMedia}>{formatearCOP(corte?.semana.total ?? 0)}</Text>
-          </Tarjeta>
-        </View>
+        {estado.tipo === 'cargando' && (
+          <View style={e.cargando}>
+            <ActivityIndicator color={colores.acento} />
+          </View>
+        )}
 
-        {/* Gráfica ingresos vs gastos */}
-        {serie.length > 0 && (
-          <Tarjeta>
-            <View style={e.graficaCabecera}>
-              <Text style={e.etiqueta}>Últimos 14 días</Text>
-              <View style={e.leyenda}>
-                <View style={[e.leyendaPunto, { backgroundColor: colores.ingreso }]} />
-                <Text style={e.leyendaTexto}>Ingresos</Text>
-                <View style={[e.leyendaPunto, { backgroundColor: colores.acentoProfundo }]} />
-                <Text style={e.leyendaTexto}>Gastos</Text>
-              </View>
+        {estado.tipo === 'error' && (
+          <Tarjeta style={e.error}>
+            <Ionicons name="cloud-offline-outline" size={28} color={colores.atencion} />
+            <Text style={e.errorTitulo}>No pudimos calcular tus totales</Text>
+            <Text style={e.errorTexto}>Tus gastos están guardados. Intenta recargar el resumen.</Text>
+            <Boton texto="Reintentar" alPresionar={reintentar} />
+          </Tarjeta>
+        )}
+
+        {r && (
+          <>
+            {/* Total del período */}
+            <View style={e.encabezado}>
+              <Text style={e.etiquetaPrincipal}>{r.rango.titulo} · gastaste</Text>
+              <Text style={e.cifraPrincipal}>{formatearCOP(r.gastos)}</Text>
+              {variacion && (
+                <Text style={[e.variacion, { color: variacion.subio ? colores.atencion : colores.ingreso }]}>
+                  {variacion.texto}
+                </Text>
+              )}
+              <Text style={e.subCifra}>
+                {r.cantidadGastos === 1 ? '1 gasto' : `${r.cantidadGastos} gastos`}
+                {r.ingresos > 0 ? (
+                  <>
+                    {'  ·  '}
+                    <Text style={{ color: colores.ingreso }}>Ingresos {formatearCOP(r.ingresos)}</Text>
+                    {'  ·  '}
+                    <Text style={{ color: r.balance >= 0 ? colores.ingreso : colores.atencion }}>
+                      Balance {r.balance >= 0 ? '+' : ''}
+                      {formatearCOP(r.balance)}
+                    </Text>
+                  </>
+                ) : null}
+              </Text>
             </View>
-            <View style={e.grafica}>
-              {serie.map((punto) => (
-                <View key={punto.dia} style={e.columna}>
-                  <View style={e.barras}>
-                    {punto.ingresos > 0 && (
-                      <View
-                        style={[
-                          e.barra,
-                          {
-                            height: Math.max(3, (punto.ingresos / maxValor) * 80),
-                            backgroundColor: colores.ingreso,
-                          },
-                        ]}
-                      />
-                    )}
-                    {punto.gastos > 0 && (
-                      <View
-                        style={[
-                          e.barra,
-                          {
-                            height: Math.max(3, (punto.gastos / maxValor) * 80),
-                            backgroundColor: colores.acentoProfundo,
-                          },
-                        ]}
-                      />
-                    )}
+
+            {r.cantidadGastos === 0 ? (
+              <Tarjeta>
+                <Vacio
+                  icono="wallet-outline"
+                  titulo="No hay gastos registrados para este periodo"
+                  detalle="Cuando llegue una notificación de tu banco o anotes un gasto, aparecerá aquí."
+                  accion={{ texto: 'Anotar un gasto', alPresionar: () => router.push('/gasto/nuevo') }}
+                />
+              </Tarjeta>
+            ) : (
+              <>
+                {/* Gráfica del período */}
+                <Tarjeta>
+                  <View style={e.graficaCabecera}>
+                    <Text style={e.etiqueta}>
+                      {vista === 'dia' ? 'Últimos 7 días' : vista === 'semana' ? 'Día a día' : 'Día a día del mes'}
+                    </Text>
+                    <View style={e.leyenda}>
+                      <View style={[e.leyendaPunto, { backgroundColor: colores.ingreso }]} />
+                      <Text style={e.leyendaTexto}>Ingresos</Text>
+                      <View style={[e.leyendaPunto, { backgroundColor: colores.acentoProfundo }]} />
+                      <Text style={e.leyendaTexto}>Gastos</Text>
+                    </View>
                   </View>
-                </View>
-              ))}
-            </View>
-          </Tarjeta>
+                  <View style={e.grafica}>
+                    {r.barras.map((b, i) => (
+                      <View key={i} style={e.columna}>
+                        <View style={e.barras}>
+                          {b.ingresos > 0 && (
+                            <View
+                              style={[
+                                e.barra,
+                                vista === 'mes' && e.barraFina,
+                                {
+                                  height: Math.max(3, (b.ingresos / r.maximoBarra) * ALTO_GRAFICA),
+                                  backgroundColor: colores.ingreso,
+                                },
+                              ]}
+                            />
+                          )}
+                          {b.gastos > 0 && (
+                            <View
+                              style={[
+                                e.barra,
+                                vista === 'mes' && e.barraFina,
+                                {
+                                  height: Math.max(3, (b.gastos / r.maximoBarra) * ALTO_GRAFICA),
+                                  backgroundColor: b.esHoy ? colores.acento : colores.acentoProfundo,
+                                },
+                              ]}
+                            />
+                          )}
+                        </View>
+                        <Text style={[e.etiquetaBarra, b.esHoy && { color: colores.acento }]} numberOfLines={1}>
+                          {b.etiqueta}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </Tarjeta>
+
+                {/* Categorías del período */}
+                <Tarjeta>
+                  <Text style={e.etiqueta}>Por categoría</Text>
+                  <View style={e.listaCategorias}>
+                    {r.categorias.map((c) => (
+                      <View key={c.categoria} style={e.filaCategoria}>
+                        <Text style={e.nombreCategoria} numberOfLines={1}>{c.categoria}</Text>
+                        <View style={e.barraFondo}>
+                          <View
+                            style={[
+                              e.barraRelleno,
+                              { width: `${Math.max(2, (c.total / (r.categorias[0]?.total || 1)) * 100)}%` },
+                            ]}
+                          />
+                        </View>
+                        <Text style={e.montoCategoria}>{formatearCOP(c.total)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </Tarjeta>
+              </>
+            )}
+          </>
         )}
 
         {/* Presupuestos */}
@@ -242,30 +340,7 @@ export default function Dashboard() {
           </Tarjeta>
         )}
 
-        {/* Categorías */}
-        {categorias.length > 0 && (
-          <Tarjeta>
-            <Text style={e.etiqueta}>Por categoría este mes</Text>
-            <View style={e.listaCategorias}>
-              {categorias.map((c) => (
-                <View key={c.categoria} style={e.filaCategoria}>
-                  <Text style={e.nombreCategoria} numberOfLines={1}>{c.categoria}</Text>
-                  <View style={e.barraFondo}>
-                    <View
-                      style={[
-                        e.barraRelleno,
-                        { width: `${Math.max(2, (c.total / (categorias[0]?.total || 1)) * 100)}%` },
-                      ]}
-                    />
-                  </View>
-                  <Text style={e.montoCategoria}>{formatearCOP(c.total)}</Text>
-                </View>
-              ))}
-            </View>
-          </Tarjeta>
-        )}
-
-        {presupuestos.length === 0 && (
+        {presupuestos.length === 0 && estado.tipo === 'listo' && (
           <Pressable onPress={() => router.push('/presupuesto/gestionar')}>
             <Tarjeta style={e.avisoPresupuesto}>
               <Text style={e.avisoPresupuestoTexto}>
@@ -298,27 +373,44 @@ const e = StyleSheet.create({
   avisoTexto: { ...tipografia.menudo, color: colores.textoSuave, flex: 1 },
   avisoAccion: { ...tipografia.etiqueta, color: colores.acento },
 
-  encabezado: { paddingVertical: espacio.lg, gap: 4 },
+  selector: {
+    flexDirection: 'row',
+    backgroundColor: colores.superficie,
+    borderRadius: radio.sm,
+    borderWidth: 1,
+    borderColor: colores.borde,
+    padding: 3,
+  },
+  segmento: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: radio.sm - 2 },
+  segmentoActivo: { backgroundColor: colores.superficieAlta },
+  segmentoTexto: { ...tipografia.etiqueta, color: colores.textoTenue },
+  segmentoTextoActivo: { color: colores.texto, fontWeight: '600' },
+
+  cargando: { paddingVertical: espacio.xl },
+
+  error: { alignItems: 'center', gap: espacio.sm, paddingVertical: espacio.lg },
+  errorTitulo: { ...tipografia.etiqueta, fontSize: 15, color: colores.texto },
+  errorTexto: { ...tipografia.menudo, color: colores.textoSuave, textAlign: 'center', marginBottom: espacio.xs },
+
+  encabezado: { paddingTop: espacio.sm, paddingBottom: espacio.xs, gap: 4 },
   etiquetaPrincipal: { ...tipografia.etiqueta, color: colores.textoSuave },
   cifraPrincipal: { ...tipografia.cifraGrande, color: colores.acento },
-  desgloseMes: { marginTop: 2 },
-  desgloseMesTexto: { ...tipografia.menudo, color: colores.textoSuave },
+  variacion: { ...tipografia.etiqueta },
   subCifra: { ...tipografia.menudo, color: colores.textoTenue },
 
-  duo: { flexDirection: 'row', gap: espacio.sm },
-  mitad: { flex: 1, gap: 6 },
   etiqueta: { ...tipografia.etiqueta, color: colores.textoSuave },
-  cifraMedia: { ...tipografia.cifra, fontSize: 20, color: colores.texto },
 
   graficaCabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   leyenda: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   leyendaPunto: { width: 8, height: 8, borderRadius: 4 },
   leyendaTexto: { ...tipografia.menudo, color: colores.textoTenue },
 
-  grafica: { flexDirection: 'row', alignItems: 'flex-end', height: 90, gap: 3, marginTop: espacio.md },
-  columna: { flex: 1, justifyContent: 'flex-end' },
-  barras: { flexDirection: 'row', alignItems: 'flex-end', gap: 1, justifyContent: 'center' },
-  barra: { width: 5, borderRadius: 3 },
+  grafica: { flexDirection: 'row', alignItems: 'flex-end', height: ALTO_GRAFICA + 26, gap: 2, marginTop: espacio.md },
+  columna: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', gap: 4 },
+  barras: { flexDirection: 'row', alignItems: 'flex-end', gap: 1, justifyContent: 'center', minHeight: 3 },
+  barra: { width: 6, borderRadius: 3 },
+  barraFina: { width: 3, borderRadius: 2 },
+  etiquetaBarra: { ...tipografia.menudo, fontSize: 10, color: colores.textoTenue, height: 14 },
 
   presupuestoCabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   editarLink: { ...tipografia.etiqueta, color: colores.acento },
