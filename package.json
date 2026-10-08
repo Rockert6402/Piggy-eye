@@ -8,7 +8,8 @@
     "web": "expo start --web",
     "prebuild": "expo prebuild --platform android --clean",
     "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "servidor": "node servidor/index.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -17,6 +18,7 @@
     "expo-dev-client": "~6.0.0",
     "expo-file-system": "~19.0.24",
     "expo-linking": "~8.0.12",
+    "expo-network": "~8.0.8",
     "expo-notifications": "~0.32.17",
     "expo-print": "~15.0.8",
     "expo-router": "~6.0.0",

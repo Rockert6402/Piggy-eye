@@ -20,6 +20,7 @@ const mov = (p: Partial<Gasto> & { monto: number; fecha: number }): Gasto => ({
   editado_en: null,
   regla_id: null,
   texto_original: null,
+  huella: `h-${id}`,
   sincronizado: 0,
   ...p,
 });

@@ -11,6 +11,8 @@ import {
   escucharToquesAvisos,
   pedirPermisoAvisos,
 } from '../src/notificaciones/avisos';
+import '../src/sync/configuracion';
+import { iniciarSincronizacionAutomatica } from '../src/sync/monitor';
 
 // Antes de montar nada: sin el handler, los avisos con la app abierta no se ven.
 configurarAvisos();
@@ -45,6 +47,12 @@ export default function Raiz() {
   }, [listo]);
 
   useNavegarDesdeAvisos(listo);
+
+  // HU-06: con la base lista, sube lo pendiente y reintenta al reconectar.
+  useEffect(() => {
+    if (!listo) return;
+    return iniciarSincronizacionAutomatica();
+  }, [listo]);
 
   if (!listo) {
     return (

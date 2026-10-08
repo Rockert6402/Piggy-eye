@@ -16,6 +16,8 @@ import { parsearNotificacion, type NotificacionCruda } from '../parser';
 import { crearGasto } from '../db/gastos';
 import { crearPendiente, registrarDiagnostico } from '../db/pendientes';
 import { encolarSincronizacion } from '../sync/cola';
+// HU-06: deja la cola conectada al servidor también en segundo plano.
+import '../sync/configuracion';
 import { avisarCambioDatos } from '../eventos';
 import { avisarGastoRegistrado, avisarPagoSinProcesar } from './avisos';
 

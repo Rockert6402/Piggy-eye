@@ -18,7 +18,15 @@ import {
   limpiarDiagnostico,
   type EntradaDiagnostico,
 } from '../../src/db/pendientes';
-import { contarSinSincronizar, haySincronizacion } from '../../src/sync/cola';
+import {
+  contarSinSincronizar,
+  haySincronizacion,
+  obtenerEstadoSync,
+  type EstadoSync,
+} from '../../src/sync/cola';
+import { URL_SERVIDOR } from '../../src/sync/configuracion';
+import { sincronizarAhora } from '../../src/sync/monitor';
+import { useAlCambiarDatos } from '../../src/eventos';
 import { BANCOS } from '../../src/parser';
 import { exportarExtracto, PERIODOS, type Formato, type Periodo } from '../../src/exportar';
 
@@ -44,6 +52,8 @@ export default function Ajustes() {
   const permisoSMS = usePermisoSMS();
   const [bitacora, setBitacora] = useState<EntradaDiagnostico[]>([]);
   const [sinSubir, setSinSubir] = useState(0);
+  const [estadoSync, setEstadoSync] = useState<EstadoSync>(obtenerEstadoSync());
+  const [sincronizando, setSincronizando] = useState(false);
   // Formato en curso, para mostrar "Generando…" solo en ese botón.
   const [exportando, setExportando] = useState<Formato | null>(null);
   const [periodo, setPeriodo] = useState<Periodo>('mes');
@@ -53,9 +63,28 @@ export default function Ajustes() {
     const [b, n] = await Promise.all([listarDiagnostico(60), contarSinSincronizar()]);
     setBitacora(b);
     setSinSubir(n);
+    setEstadoSync(obtenerEstadoSync());
   }, []);
 
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
+  // El contador de pendientes baja solo cuando el monitor sincroniza.
+  useAlCambiarDatos(cargar);
+
+  const handleSincronizar = async () => {
+    setSincronizando(true);
+    try {
+      const n = await sincronizarAhora('manual');
+      if (n === 0 && sinSubir === 0) Alert.alert('Sincronización', 'Todo está al día.');
+    } catch {
+      Alert.alert(
+        'Sin conexión con el servidor',
+        'Tus movimientos siguen guardados en el teléfono y se enviarán solos cuando vuelva la conexión.'
+      );
+    } finally {
+      setSincronizando(false);
+      await cargar();
+    }
+  };
 
   const handleExportar = async (formato: Formato) => {
     setExportando(formato);
@@ -177,11 +206,53 @@ export default function Ajustes() {
         {/* Sincronización */}
         <Tarjeta style={e.bloque}>
           <Text style={e.encabezado}>Copia en la nube</Text>
-          <Text style={e.detalle}>
-            {haySincronizacion()
-              ? `${sinSubir} ${sinSubir === 1 ? 'movimiento' : 'movimientos'} sin subir.`
-              : 'Apagada. Todos tus datos viven solo en este teléfono y nunca salen de él.'}
-          </Text>
+          {haySincronizacion() ? (
+            <>
+              <Text style={e.detalle}>
+                Cada movimiento se guarda primero en el teléfono y se envía al servidor cuando hay
+                conexión. Si no hay internet, se envía solo al reconectarse.
+              </Text>
+              <View style={e.estadoFila}>
+                <View
+                  style={[
+                    e.punto,
+                    {
+                      backgroundColor: estadoSync.ultimoError
+                        ? colores.atencion
+                        : sinSubir === 0
+                          ? colores.ingreso
+                          : colores.textoTenue,
+                    },
+                  ]}
+                />
+                <Text style={e.estadoTexto}>
+                  {sinSubir === 0
+                    ? 'Todo sincronizado'
+                    : `${sinSubir} ${sinSubir === 1 ? 'movimiento pendiente' : 'movimientos pendientes'}`}
+                </Text>
+              </View>
+              {estadoSync.ultimoError && sinSubir > 0 && (
+                <Text style={e.detalle}>
+                  Último intento {fechaLegible(estadoSync.ultimoError.fecha)}: {estadoSync.ultimoError.mensaje}.
+                  Tus datos están a salvo en el teléfono.
+                </Text>
+              )}
+              {estadoSync.ultimaExitosa && (
+                <Text style={e.detalle}>Última sincronización: {fechaLegible(estadoSync.ultimaExitosa)}</Text>
+              )}
+              <Text style={e.detalle}>Servidor: {URL_SERVIDOR}</Text>
+              <Boton
+                texto={sincronizando ? 'Sincronizando…' : 'Sincronizar ahora'}
+                variante="secundario"
+                alPresionar={handleSincronizar}
+                deshabilitado={sincronizando}
+              />
+            </>
+          ) : (
+            <Text style={e.detalle}>
+              Apagada. Todos tus datos viven solo en este teléfono y nunca salen de él.
+            </Text>
+          )}
         </Tarjeta>
 
         {/* Bancos */}

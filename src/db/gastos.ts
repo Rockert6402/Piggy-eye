@@ -22,6 +22,8 @@ export interface Gasto {
   editado_en: number | null;
   regla_id: string | null;
   texto_original: string | null;
+  /** Única y estable: es la clave con la que el servidor evita duplicados (HU-06). */
+  huella: string;
   sincronizado: number;
 }
 
