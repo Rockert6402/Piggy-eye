@@ -122,6 +122,19 @@ export async function listarGastos(
   );
 }
 
+/**
+ * Movimientos entre dos instantes, del más antiguo al más reciente, como
+ * los ordena un extracto bancario. Usa el índice por fecha.
+ */
+export async function listarGastosEntre(desde: number, hasta: number): Promise<Gasto[]> {
+  const bd = await abrirBD();
+  return bd.getAllAsync<Gasto>(
+    'SELECT * FROM gastos WHERE fecha >= ? AND fecha < ? ORDER BY fecha ASC, id ASC',
+    desde,
+    hasta
+  );
+}
+
 /** HU-08: editar. Solo toca los campos que vengan definidos. */
 export async function editarGasto(
   id: number,

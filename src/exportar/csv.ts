@@ -1,51 +1,40 @@
-import { Platform, Share } from 'react-native';
-import { listarGastos } from '../db/gastos';
+/**
+ * Extracto en CSV, para importarlo en otras apps.
+ *
+ * Usa punto y coma como separador y BOM UTF-8: es lo que espera Excel con
+ * configuración regional de Colombia (donde la coma es el decimal), y el
+ * BOM hace que las tildes se vean bien al abrirlo con doble clic.
+ */
 
-function escaparCSV(valor: string | number | null | undefined): string {
-  if (valor === null || valor === undefined) return '';
+import { fechaHora, type Extracto } from './extracto';
+
+const SEP = ';';
+
+function campo(valor: string | number): string {
   const s = String(valor);
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
+  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function formatearFecha(ms: number): string {
-  return new Date(ms).toLocaleDateString('es-CO', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  });
+/** Montos sin separador de miles y con coma decimal: 52900 o 12,5 */
+function monto(n: number): string {
+  return n ? String(n).replace('.', ',') : '';
 }
 
-export async function exportarCSV(): Promise<{ ok: boolean; mensaje?: string }> {
-  if (Platform.OS !== 'android') {
-    return { ok: false, mensaje: 'Solo disponible en Android por ahora.' };
-  }
-
-  const todos = await listarGastos(10_000, 0);
-  if (todos.length === 0) {
-    return { ok: false, mensaje: 'No hay movimientos para exportar.' };
-  }
-
-  const cabecera = ['Fecha', 'Tipo', 'Monto', 'Comercio', 'Categoría', 'Banco', 'Origen', 'Nota'].join(',');
-  const filas = todos.map((g) =>
+export function extractoACsv(x: Extracto): string {
+  const cabecera = ['Fecha', 'Descripción', 'Categoría', 'Banco / medio', 'Registro', 'Entradas', 'Salidas', 'Saldo'];
+  const filas = x.filas.map((f) =>
     [
-      escaparCSV(formatearFecha(g.fecha)),
-      escaparCSV(g.tipo),
-      escaparCSV(g.monto),
-      escaparCSV(g.comercio),
-      escaparCSV(g.categoria),
-      escaparCSV(g.banco),
-      escaparCSV(g.origen),
-      escaparCSV(g.nota),
-    ].join(',')
+      fechaHora(f.fecha),
+      f.descripcion,
+      f.categoria,
+      f.medio,
+      f.registro,
+      monto(f.entrada),
+      monto(f.salida),
+      monto(f.saldo) || '0',
+    ]
+      .map(campo)
+      .join(SEP)
   );
-
-  const contenido = [cabecera, ...filas].join('\n');
-
-  await Share.share({
-    title: `piggy-eye-${new Date().toISOString().slice(0, 10)}.csv`,
-    message: contenido,
-  });
-
-  return { ok: true };
+  return '﻿' + [cabecera.map(campo).join(SEP), ...filas].join('\r\n') + '\r\n';
 }

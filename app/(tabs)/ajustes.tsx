@@ -20,7 +20,7 @@ import {
 } from '../../src/db/pendientes';
 import { contarSinSincronizar, haySincronizacion } from '../../src/sync/cola';
 import { BANCOS } from '../../src/parser';
-import { exportarCSV } from '../../src/exportar/csv';
+import { exportarExtracto, PERIODOS, type Formato, type Periodo } from '../../src/exportar';
 
 const COLOR_VEREDICTO: Record<string, string> = {
   registrada: colores.ingreso,
@@ -44,7 +44,9 @@ export default function Ajustes() {
   const permisoSMS = usePermisoSMS();
   const [bitacora, setBitacora] = useState<EntradaDiagnostico[]>([]);
   const [sinSubir, setSinSubir] = useState(0);
-  const [exportando, setExportando] = useState(false);
+  // Formato en curso, para mostrar "Generando…" solo en ese botón.
+  const [exportando, setExportando] = useState<Formato | null>(null);
+  const [periodo, setPeriodo] = useState<Periodo>('mes');
   const [expandirBitacora, setExpandirBitacora] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -55,12 +57,15 @@ export default function Ajustes() {
 
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
 
-  const handleExportar = async () => {
-    setExportando(true);
-    const resultado = await exportarCSV();
-    setExportando(false);
-    if (!resultado.ok && resultado.mensaje) {
-      Alert.alert('Exportar', resultado.mensaje);
+  const handleExportar = async (formato: Formato) => {
+    setExportando(formato);
+    try {
+      const resultado = await exportarExtracto(formato, periodo);
+      if (!resultado.ok && resultado.mensaje) {
+        Alert.alert('Exportar', resultado.mensaje);
+      }
+    } finally {
+      setExportando(null);
     }
   };
 
@@ -120,16 +125,53 @@ export default function Ajustes() {
 
         {/* Exportar */}
         <Tarjeta style={e.bloque}>
-          <Text style={e.encabezado}>Exportar movimientos</Text>
+          <Text style={e.encabezado}>Exportar extracto</Text>
           <Text style={e.detalle}>
-            Descarga todos tus movimientos en formato CSV, compatible con Excel y Google Sheets.
+            Genera un extracto como el del banco: entradas, salidas, saldo y resumen por mes y
+            categoría. Lo puedes guardar en Drive o enviarlo por WhatsApp o correo.
           </Text>
-          <Boton
-            texto={exportando ? 'Exportando…' : 'Exportar a CSV'}
-            variante="secundario"
-            alPresionar={handleExportar}
-            deshabilitado={exportando}
-          />
+
+          <Text style={e.etiquetaPeriodo}>Período</Text>
+          <View style={e.chips}>
+            {PERIODOS.map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => setPeriodo(p.id)}
+                style={[e.chipPeriodo, periodo === p.id && e.chipPeriodoActivo]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: periodo === p.id }}
+              >
+                <Text style={[e.chipTexto, periodo === p.id && e.chipTextoActivo]}>{p.etiqueta}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={e.botonesExportar}>
+            <View style={{ flex: 1 }}>
+              <Boton
+                texto={exportando === 'excel' ? 'Generando…' : 'Excel'}
+                alPresionar={() => handleExportar('excel')}
+                deshabilitado={exportando !== null}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Boton
+                texto={exportando === 'pdf' ? 'Generando…' : 'PDF'}
+                variante="secundario"
+                alPresionar={() => handleExportar('pdf')}
+                deshabilitado={exportando !== null}
+              />
+            </View>
+          </View>
+          <Pressable
+            onPress={() => handleExportar('csv')}
+            disabled={exportando !== null}
+            style={{ alignSelf: 'center', padding: 4 }}
+          >
+            <Text style={e.linkAccion}>
+              {exportando === 'csv' ? 'Generando CSV…' : 'Exportar como CSV'}
+            </Text>
+          </Pressable>
         </Tarjeta>
 
         {/* Sincronización */}
@@ -239,6 +281,18 @@ const e = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { backgroundColor: colores.superficieAlta, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radio.sm },
   chipTexto: { ...tipografia.menudo, color: colores.textoSuave },
+  chipTextoActivo: { color: colores.fondo, fontWeight: '600' },
+  chipPeriodo: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radio.sm,
+    backgroundColor: colores.superficieAlta,
+    borderWidth: 1,
+    borderColor: colores.borde,
+  },
+  chipPeriodoActivo: { backgroundColor: colores.acento, borderColor: colores.acento },
+  etiquetaPeriodo: { ...tipografia.menudo, color: colores.textoSuave, marginTop: espacio.xs },
+  botonesExportar: { flexDirection: 'row', gap: espacio.sm, marginTop: espacio.xs },
 
   vacioTexto: { ...tipografia.menudo, color: colores.textoTenue },
   listaBitacora: { gap: espacio.sm },
