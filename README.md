@@ -33,12 +33,12 @@ SQLite · TypeScript · Jest.
 |----|----------|:------:|:-------------------:|:------------------:|
 | HU-01 | Registro automático por notificación bancaria | ✅ | ✅ | ⏳ |
 | HU-02 | Filtrado de notificaciones (falsos positivos) | ✅ | ✅ | ⏳ |
-| HU-03 | Registro manual de gasto en efectivo | ✅ | — | ⏳ |
+| HU-03 | Registro manual de gasto en efectivo | ✅ | — | ✅ |
 | HU-04 | Confirmación manual cuando el parser falla | ✅ | ✅ | ⏳ |
-| HU-05 | Dashboard por día, semana y mes | ✅ | ✅ | ⏳ |
+| HU-05 | Dashboard por día, semana y mes | ✅ | ✅ | ✅ |
 | HU-06 | Registro y sincronización sin conexión | ✅ (servidor simulado) | ✅ | ⏳ |
-| HU-07 | Gestión del permiso de notificaciones | ✅ | — | ⏳ |
-| HU-08 / 09 / 10 | Editar, eliminar y ver detalle de un gasto | ✅ | — | ⏳ |
+| HU-07 | Gestión del permiso de notificaciones | ✅ | — | ✅ |
+| HU-08 / 09 / 10 | Editar, eliminar y ver detalle de un gasto | ✅ | — | ✅ |
 
 Extra: exportar el extracto en **Excel, PDF o CSV**, presupuestos por
 categoría y lectura de **SMS** bancarios.
