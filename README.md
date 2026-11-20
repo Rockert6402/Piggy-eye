@@ -309,17 +309,4 @@ vulnerabilidades conocidas.
 
 ---
 
-## Pendientes
 
-- Validar los patrones y los *package names* de cada banco con notificaciones
-  reales (tarea #1).
-- Pruebas en teléfono físico de todas las historias (checklists de Trello).
-- Revisión de código por el equipo.
-- Ajustar en Trello el criterio de HU-01: "$XX.XX" está pensado en dólares; en
-  pesos la app muestra "$25.000".
-- Decidir si `cuota` y `seguro` deben seguir en la lista de descarte del
-  filtro: hoy descartan pagos reales como "Pagaste tu cuota".
-- HU-06: borrar un gasto en el teléfono no lo borra del servidor. Para un
-  backend real hace falta HTTPS, porque Android solo permite HTTP en builds
-  de desarrollo.
-- Categorización automática: fuera de alcance según el acta.
